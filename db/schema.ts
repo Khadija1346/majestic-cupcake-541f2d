@@ -198,3 +198,15 @@ export const modActions = pgTable(
   },
   (t) => [index('mod_actions_target_idx').on(t.targetType, t.targetId)],
 )
+
+
+/** Persistent town-farming state. All crop timers and stock are server-authoritative. */
+export const farmStates = pgTable('farm_states', {
+  citizenId: text('citizen_id').primaryKey().references(() => citizens.id, { onDelete: 'cascade' }),
+  plots: jsonb().$type<{ id: string; state: 'empty' | 'growing'; plantedAt: string | null; wateredAt: string | null; readyAt: string | null }[]>().notNull(),
+  seeds: integer().notNull().default(3),
+  cassava: integer().notNull().default(0),
+  garri: integer().notNull().default(0),
+  version: integer().notNull().default(0),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+})
