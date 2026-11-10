@@ -6,6 +6,6 @@ CREATE TABLE "farm_states" (
   "garri" integer DEFAULT 0 NOT NULL,
   "version" integer DEFAULT 0 NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT "farm_states_citizen_id_citizens_id_fk"
+  CONSTRAINT "farm_states_citizen_id_citizens_id_fkey"
     FOREIGN KEY ("citizen_id") REFERENCES "citizens"("id") ON DELETE CASCADE
 );
