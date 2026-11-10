@@ -34,7 +34,7 @@ function view(eye:V3,target:V3) {
 function World3DPreview(){
   const canvas=useRef<HTMLCanvasElement>(null)
   const [error,setError]=useState('')
-  const [hint,setHint]=useState('Drag to look around · WASD to move')
+  const hint='Drag to look around · WASD to move'
   useEffect(()=>{
     const el=canvas.current, gl=el?.getContext('webgl',{antialias:true})
     if(!el||!gl){setError('This browser could not start WebGL. Try Chrome with hardware acceleration enabled.');return}
@@ -109,7 +109,7 @@ function World3DPreview(){
       const draw=()=>{
         const w=el.clientWidth,h=el.clientHeight,dpr=Math.min(devicePixelRatio||1,1.5)
         if(el.width!==Math.round(w*dpr)||el.height!==Math.round(h*dpr)){el.width=Math.round(w*dpr);el.height=Math.round(h*dpr)}
-        gl.viewport(0,0,el.width,el.height);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.clearColor(.48,.69,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)
+        gl.viewport(0,0,el.width,el.height);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.48,.69,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)
         const step=.12
         if(keys.has('w')||keys.has('arrowup')){px+=Math.sin(yaw)*step;pz-=Math.cos(yaw)*step}
         if(keys.has('s')||keys.has('arrowdown')){px-=Math.sin(yaw)*step;pz+=Math.cos(yaw)*step}
