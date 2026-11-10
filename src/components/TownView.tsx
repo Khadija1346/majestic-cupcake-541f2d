@@ -1,7 +1,8 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Map as MapIcon, ScrollText, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TownEngine, type Focus } from '@/game/town/engine'
+import { TownEngine, type Focus, type FarmWorldState } from '@/game/town/engine'
+import { getFarm } from '@/server/farm.functions'
 import { BUILDINGS, GARDENS, PLAZA, QUEST_BOARD, ROADS, SPAWN, WORLD_H, WORLD_W, type NpcDef } from '@/game/town/map'
 import { DISTRICTS, QUESTS, questState } from '@/game/content'
 import {
@@ -27,6 +28,21 @@ export function TownView() {
   const [showMap, setShowMap] = useState(false)
   const [pos, setPos] = useState(SPAWN)
   const [touch, setTouch] = useState(false)
+
+  // The town's crop artwork is a view of the same server ledger used by /farm.
+  useEffect(() => {
+    let active = true
+    if (!citizen) {
+      engineRef.current?.setFarm(null)
+      return () => { active = false }
+    }
+    void getFarm().then((farm) => {
+      if (active) engineRef.current?.setFarm(farm as FarmWorldState)
+    }).catch(() => {
+      if (active) engineRef.current?.setFarm(null)
+    })
+    return () => { active = false }
+  }, [citizen?.id])
 
   // Boot the engine once on the client
   useEffect(() => {
