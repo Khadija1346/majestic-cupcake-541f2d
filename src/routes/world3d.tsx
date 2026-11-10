@@ -8,9 +8,18 @@ type Thing = { p: V3; s: V3; c: V3; kind?: 'person' | 'tree' }
 
 const vertex = `attribute vec3 aPosition;
 attribute vec3 aColor;
+attribute float aMotion;
 uniform mat4 uMvp;
+uniform float uTime;
 varying vec3 vColor;
-void main(){ gl_Position=uMvp*vec4(aPosition,1.0); vColor=aColor; }`
+void main(){
+  vec3 p=aPosition;
+  if(aMotion>0.0){
+    p.x += sin(uTime*2.2+aMotion)*0.12;
+    p.y += abs(sin(uTime*2.2+aMotion))*0.035;
+  }
+  gl_Position=uMvp*vec4(p,1.0); vColor=aColor;
+}`
 const fragment = `precision mediump float;
 varying vec3 vColor;
 void main(){ gl_FragColor=vec4(vColor,1.0); }`
@@ -34,7 +43,7 @@ function view(eye:V3,target:V3) {
 function World3DPreview(){
   const canvas=useRef<HTMLCanvasElement>(null)
   const [error,setError]=useState('')
-  const hint='Drag to look around · WASD to move'
+  const hint='Drag to look around · Use the on-screen pad to walk'
   useEffect(()=>{
     const el=canvas.current, gl=el?.getContext('webgl',{antialias:true})
     if(!el||!gl){setError('This browser could not start WebGL. Try Chrome with hardware acceleration enabled.');return}
@@ -43,8 +52,8 @@ function World3DPreview(){
       const program=gl.createProgram()!;gl.attachShader(program,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program)
       if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program)||'3D renderer link failed')
       gl.useProgram(program)
-      const vertices:number[]=[],colors:number[]=[]
-      const cube=(p:V3,s:V3,c:V3)=>{
+      const vertices:number[]=[],colors:number[]=[],motions:number[]=[]
+      const cube=(p:V3,s:V3,c:V3,motion=0)=>{
         const [x,y,z]=p,[w,h,d]=s, faces=[
           [[0,0,1],[0,0,1],[1,0,1],[1,1,1],[0,1,1]],
           [[0,0,0],[1,0,0],[1,0,1],[1,1,1],[1,1,0]],
@@ -54,7 +63,7 @@ function World3DPreview(){
           [[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,0]]
         ]
         const tris=[[0,1,2,0,2,3]]
-        for(let f=0;f<faces.length;f++){const a=faces[f];for(const i of tris[0]){const q=a[i];vertices.push(x+q[0]*w,y+q[1]*h,z+q[2]*d);const light=[.82,1,.78,.92,.68,.74][f];colors.push(c[0]*light,c[1]*light,c[2]*light)}}
+        for(let f=0;f<faces.length;f++){const a=faces[f];for(const i of tris[0]){const q=a[i];vertices.push(x+q[0]*w,y+q[1]*h,z+q[2]*d);const light=[.82,1,.78,.92,.68,.74][f];colors.push(c[0]*light,c[1]*light,c[2]*light);motions.push(motion)}}
       }
       const things:Thing[]=[
         {p:[0,-.12,0],s:[70,.2,70],c:[.22,.42,.2]},
@@ -85,19 +94,21 @@ function World3DPreview(){
       // Stylised resident figures placed around the plaza and work areas.
       const people:[number,number,number][]=[[-3,0,-5],[3,0,-4],[-7,0,5],[5,0,8],[15,0,3],[-14,0,-1]]
       for(const [x,y,z] of people){
-        things.push({p:[x-.22,y,z-.18],s:[.44,1.05,.36],c:[.75,.25,.12]})
-        things.push({p:[x-.19,y+1.05,z-.16],s:[.38,.38,.34],c:[.35,.2,.12]})
-        things.push({p:[x-.28,y-.85,z-.12],s:[.2,.85,.22],c:[.12,.13,.18]})
-        things.push({p:[x+.08,y-.85,z-.12],s:[.2,.85,.22],c:[.12,.13,.18]})
+        things.push({p:[x-.22,y,z-.18],s:[.44,1.05,.36],c:[.75,.25,.12],kind:'person'})
+        things.push({p:[x-.19,y+1.05,z-.16],s:[.38,.38,.34],c:[.35,.2,.12],kind:'person'})
+        things.push({p:[x-.28,y-.85,z-.12],s:[.2,.85,.22],c:[.12,.13,.18],kind:'person'})
+        things.push({p:[x+.08,y-.85,z-.12],s:[.2,.85,.22],c:[.12,.13,.18],kind:'person'})
       }
-      for(const t of things)cube(t.p,t.s,t.c)
+      for(const t of things){const motion=t.kind==='person'?(t.p[0]+t.p[2])*.17+1:0;cube(t.p,t.s,t.c,motion)}
       const vb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW)
-      const stride=6*4, pos=gl.getAttribLocation(program,'aPosition'), col=gl.getAttribLocation(program,'aColor')
+      const stride=6*4, pos=gl.getAttribLocation(program,'aPosition'), col=gl.getAttribLocation(program,'aColor'), motionLoc=gl.getAttribLocation(program,'aMotion')
       gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,3,gl.FLOAT,false,stride,0)
       const cb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(colors),gl.STATIC_DRAW)
       gl.enableVertexAttribArray(col);gl.vertexAttribPointer(col,3,gl.FLOAT,false,0,0)
-      const mvp=gl.getUniformLocation(program,'uMvp')
-      let px=0,pz=13,yaw=0,drag=false,lastX=0,frame=0
+      const mb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,mb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(motions),gl.STATIC_DRAW)
+      gl.enableVertexAttribArray(motionLoc);gl.vertexAttribPointer(motionLoc,1,gl.FLOAT,false,0,0)
+      const mvp=gl.getUniformLocation(program,'uMvp'), timeLoc=gl.getUniformLocation(program,'uTime')
+      let px=0,pz=13,yaw=0,drag=false,lastX=0,frame=0,startTime=performance.now()
       const keys=new Set<string>()
       const down=(e:KeyboardEvent)=>{keys.add(e.key.toLowerCase())}
       const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase())
@@ -118,22 +129,28 @@ function World3DPreview(){
         px=Math.max(-27,Math.min(27,px));pz=Math.max(-27,Math.min(27,pz))
         const eye:[number,number,number]=[px-Math.sin(yaw)*8,5.5,pz+Math.cos(yaw)*8]
         const target:[number,number,number]=[px,1.1,pz]
-        gl.uniformMatrix4fv(mvp,false,multiply(perspective(Math.PI/3,el.width/Math.max(1,el.height),.1,120),view(eye,target)))
+        gl.uniform1f(timeLoc,(performance.now()-startTime)/1000);gl.uniformMatrix4fv(mvp,false,multiply(perspective(Math.PI/3,el.width/Math.max(1,el.height),.1,120),view(eye,target)))
         gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);frame=requestAnimationFrame(draw)
       }
       draw()
-      return ()=>{cancelAnimationFrame(frame);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);el.removeEventListener('pointerdown',start);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);el.removeEventListener('pointercancel',end);gl.deleteBuffer(vb);gl.deleteBuffer(cb);gl.deleteProgram(program)}
+      return ()=>{cancelAnimationFrame(frame);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);el.removeEventListener('pointerdown',start);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);el.removeEventListener('pointercancel',end);gl.deleteBuffer(vb);gl.deleteBuffer(cb);gl.deleteBuffer(mb);gl.deleteProgram(program)}
     }catch(e){setError(e instanceof Error?e.message:'3D scene could not start')}
   },[])
   return <main className="fixed inset-0 overflow-hidden bg-[#16251d] text-white">
-    <canvas ref={canvas} className="h-full w-full touch-pan-y" aria-label="GARRIVERSE 3D village preview"/>
+    <canvas ref={canvas} className="h-full w-full touch-none" aria-label="GARRIVERSE 3D village preview"/>
     <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/20 bg-black/55 px-4 py-3 backdrop-blur">
       <div className="text-xs font-black tracking-[.24em] text-amber-300">GARRIVERSE 2026</div>
       <div className="mt-1 text-lg font-bold">Living Town · 3D prototype</div>
       <div className="text-xs text-white/70">{hint}</div>
     </div>
     <a href="/" className="absolute right-4 top-4 rounded-xl bg-black/60 px-4 py-3 text-sm font-semibold">← Back to town</a>
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-4 py-2 text-xs text-white/80">WASD / Arrow keys · Drag to look · Prototype preview</div>
+    <div className="absolute bottom-5 left-5 grid grid-cols-3 gap-2 select-none">
+      <span />
+      {(['w'] as const).map(k=><button key={k} aria-label="Move forward" className="h-12 w-12 rounded-xl border border-white/30 bg-black/65 text-xl font-bold" onPointerDown={()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:k}))} onPointerUp={()=>window.dispatchEvent(new KeyboardEvent('keyup',{key:k}))} onPointerLeave={()=>window.dispatchEvent(new KeyboardEvent('keyup',{key:k}))}>↑</button>)}
+      <span />
+      {(['a','s','d'] as const).map((k)=><button key={k} aria-label={k==='a'?'Move left':k==='s'?'Move backward':'Move right'} className="h-12 w-12 rounded-xl border border-white/30 bg-black/65 text-xl font-bold" onPointerDown={()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:k}))} onPointerUp={()=>window.dispatchEvent(new KeyboardEvent('keyup',{key:k}))} onPointerLeave={()=>window.dispatchEvent(new KeyboardEvent('keyup',{key:k}))}>{k==='a'?'←':k==='s'?'↓':'→'}</button>)}
+    </div>
+    <div className="absolute bottom-5 right-5 rounded-xl bg-black/65 px-3 py-2 text-xs text-white/80">Drag screen to look</div>
     {error&&<div role="alert" className="absolute bottom-20 left-4 right-4 rounded-xl bg-red-950/90 p-3 text-sm">{error}</div>}
   </main>
 }
