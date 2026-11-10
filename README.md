@@ -6,4 +6,6 @@ A mobile-first 2D browser game set in a Nigerian-inspired town. Walk the town as
 
 **Run locally:** `pnpm install` then `netlify dev` (or `pnpm dev`).
 
+**GARRIVERSE 2026:** The living-world upgrade specification is in [docs/GARRIVERSE_2026_LIVING_WORLD.md](docs/GARRIVERSE_2026_LIVING_WORLD.md). It defines the world design, NPC simulation, walkable farm district, cassava-to-garri production loop, mobile performance requirements, delivery phases and acceptance criteria.
+
 **Roadmap:** see [PLAN.md](PLAN.md) — database persistence, accounts, server score verification, Mod Hub, referral ledger, rewards, NFT minting and more mini-games come next.
