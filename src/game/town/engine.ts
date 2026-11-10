@@ -320,6 +320,7 @@ export class TownEngine {
     this.drawGround(x0, x1, y0, y1)
     this.drawPlaza()
     this.drawPond()
+    this.drawFarmFields()
 
     const view = { l: cx - halfW - 4 * T, r: cx + halfW + 4 * T, t: cy - halfH - 4 * T, b: cy + halfH + 8 * T }
     const visible = (x: number, y: number) => x > view.l && x < view.r && y > view.t && y < view.b
@@ -384,6 +385,68 @@ export class TownEngine {
           if (this.tiles[y * WORLD_W + x + 1] === GRASS) ctx.fillRect(px + T - 3, py, 3, T)
         }
       }
+  }
+
+  /** Visible cassava plots and irrigation make the farm district readable in-world. */
+  private drawFarmFields() {
+    const ctx = this.ctx
+    const x = 43 * T, y = 39.2 * T
+    // Packed-earth farm paths and plot borders
+    ctx.fillStyle = '#9b7040'
+    ctx.fillRect(x - 8, y + 2, 9 * T, 7 * T)
+    ctx.fillStyle = '#5b3d25'
+    for (let row = 0; row < 4; row++) {
+      const py = y + 18 + row * 43
+      ctx.fillRect(x + 10, py, 7.5 * T, 27)
+      ctx.fillStyle = '#bd8b4d'
+      ctx.fillRect(x + 10, py, 7.5 * T, 3)
+      ctx.fillStyle = '#5b3d25'
+    }
+    // Narrow blue irrigation channels with animated water highlights
+    ctx.fillStyle = '#285d82'
+    ctx.fillRect(x + 4, y + 8, 7, 6 * T)
+    ctx.fillRect(x + 4, y + 6 * T, 7.5 * T, 7)
+    ctx.fillStyle = 'rgba(150,220,245,0.65)'
+    for (let i = 0; i < 7; i++) {
+      const wx = x + 5 + ((this.time * 18 + i * 31) % (7.2 * T))
+      ctx.fillRect(wx, y + 8 + (i % 3) * 3, 10, 2)
+    }
+    // Cassava stems, broad leaves and small growth-stage differences
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 8; col++) {
+        const px = x + 22 + col * 28 + (row % 2) * 5
+        const py = y + 29 + row * 43
+        const sway = Math.sin(this.time * 1.7 + row * 3 + col) * 2
+        const height = 9 + ((row * 5 + col * 3) % 4) * 2
+        ctx.strokeStyle = '#76502d'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(px, py + 8)
+        ctx.lineTo(px + sway * 0.25, py - height)
+        ctx.stroke()
+        for (let leaf = 0; leaf < 5; leaf++) {
+          const a = (leaf / 5) * Math.PI * 2 + this.time * 0.18 + col
+          ctx.save()
+          ctx.translate(px + sway * 0.25, py - height)
+          ctx.rotate(a)
+          ctx.fillStyle = leaf % 2 ? '#2f7d3a' : '#4b9b46'
+          ctx.beginPath()
+          ctx.ellipse(7, 0, 8, 3, 0, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.restore()
+        }
+      }
+    }
+    // District marker
+    ctx.fillStyle = 'rgba(18,15,46,0.82)'
+    ctx.beginPath()
+    ctx.roundRect(x + 2.4 * T, y + 6.2 * T, 116, 20, 6)
+    ctx.fill()
+    ctx.font = '700 9px Unbounded, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#f2b632'
+    ctx.fillText('CASSAVA FIELDS', x + 2.4 * T + 58, y + 6.2 * T + 10)
   }
 
   private drawPlaza() {
