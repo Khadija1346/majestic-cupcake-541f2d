@@ -41,7 +41,7 @@ const inRect = (x: number, y: number, r: Rect, pad = 0) => x >= r.x - pad && x <
 interface Tree { x: number; y: number; kind: 'palm' | 'round' | 'bush'; s: number }
 export type FarmWorldState = { plots: { id: string; state: 'empty' | 'growing'; wateredAt: string | null; readyAt: string | null }[]; seeds: number; cassava: number; garri: number }
 
-interface Npc { def: Npc; x: number; y: number; tx: number; ty: number; wait: number; dir: number; phase: number; moving: boolean; route: { x: number; y: number }[]; stop: number }
+interface Npc { def: NpcDef; x: number; y: number; tx: number; ty: number; wait: number; dir: number; phase: number; moving: boolean; route: { x: number; y: number }[]; stop: number }
 interface Decor { kind: 'lamp' | 'danfo' | 'flowers'; x: number; y: number; c?: string }
 
 export class TownEngine {
