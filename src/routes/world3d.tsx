@@ -34,6 +34,7 @@ function view(eye:V3,target:V3) {
 function World3DPreview(){
   const canvas=useRef<HTMLCanvasElement>(null)
   const [error,setError]=useState('')
+  const [interaction,setInteraction]=useState('Explore the village. Walk to the cassava plots and press E to open the Farm District.')
   const hint='Drag to look around · WASD to move'
   useEffect(()=>{
     const el=canvas.current, gl=el?.getContext('webgl',{antialias:true})
@@ -99,7 +100,22 @@ function World3DPreview(){
       const mvp=gl.getUniformLocation(program,'uMvp')
       let px=0,pz=13,yaw=0,drag=false,lastX=0,frame=0
       const keys=new Set<string>()
-      const down=(e:KeyboardEvent)=>{keys.add(e.key.toLowerCase())}
+      const buildings=[{x:-11,z:-10,rx:5.2,rz:4.7},{x:8,z:-13,rx:5.7,rz:5.2},{x:13,z:8,rx:5.1,rz:4.7},{x:-15,z:12,rx:4.6,rz:4.5},{x:-18,z:-2,rx:4.7,rz:4.2}]
+      const farmPoint={x:11,z:15}
+      const blocked=(x:number,z:number)=>buildings.some(b=>Math.abs(x-b.x)<b.rx&&Math.abs(z-b.z)<b.rz)
+      const down=(e:KeyboardEvent)=>{
+        const key=e.key.toLowerCase()
+        if(key==='e'){
+          const farmDistance=Math.hypot(px-farmPoint.x,pz-farmPoint.z)
+          const marketDistance=Math.hypot(px-13,pz-8)
+          const millDistance=Math.hypot(px+18,pz+2)
+          if(farmDistance<5){setInteraction('Farm District selected. Opening the live Farm page for planting, watering, harvesting and processing.');window.location.href='/farm';return}
+          if(marketDistance<6)setInteraction('Market Square: this location is a world preview. Trading is not enabled yet.')
+          else if(millDistance<6)setInteraction('Garri Processing Shed: processing gameplay is not connected to this 3D scene yet.')
+          else setInteraction('Move closer to the cassava plots, market or processing shed to interact.')
+        }
+        keys.add(key)
+      }
       const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase())
       const start=(e:PointerEvent)=>{drag=true;lastX=e.clientX;el.setPointerCapture(e.pointerId)}
       const move=(e:PointerEvent)=>{if(drag){yaw+=(e.clientX-lastX)*.006;lastX=e.clientX}}
@@ -111,11 +127,14 @@ function World3DPreview(){
         if(el.width!==Math.round(w*dpr)||el.height!==Math.round(h*dpr)){el.width=Math.round(w*dpr);el.height=Math.round(h*dpr)}
         gl.viewport(0,0,el.width,el.height);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.48,.69,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)
         const step=.12
-        if(keys.has('w')||keys.has('arrowup')){px+=Math.sin(yaw)*step;pz-=Math.cos(yaw)*step}
-        if(keys.has('s')||keys.has('arrowdown')){px-=Math.sin(yaw)*step;pz+=Math.cos(yaw)*step}
-        if(keys.has('a')||keys.has('arrowleft')){px-=Math.cos(yaw)*step;pz-=Math.sin(yaw)*step}
-        if(keys.has('d')||keys.has('arrowright')){px+=Math.cos(yaw)*step;pz+=Math.sin(yaw)*step}
-        px=Math.max(-27,Math.min(27,px));pz=Math.max(-27,Math.min(27,pz))
+        let dx=0,dz=0
+        if(keys.has('w')||keys.has('arrowup')){dx+=Math.sin(yaw)*step;dz-=Math.cos(yaw)*step}
+        if(keys.has('s')||keys.has('arrowdown')){dx-=Math.sin(yaw)*step;dz+=Math.cos(yaw)*step}
+        if(keys.has('a')||keys.has('arrowleft')){dx-=Math.cos(yaw)*step;dz-=Math.sin(yaw)*step}
+        if(keys.has('d')||keys.has('arrowright')){dx+=Math.cos(yaw)*step;dz+=Math.sin(yaw)*step}
+        const nextX=Math.max(-27,Math.min(27,px+dx)),nextZ=Math.max(-27,Math.min(27,pz+dz))
+        if(!blocked(nextX,pz))px=nextX
+        if(!blocked(px,nextZ))pz=nextZ
         const eye:[number,number,number]=[px-Math.sin(yaw)*8,5.5,pz+Math.cos(yaw)*8]
         const target:[number,number,number]=[px,1.1,pz]
         gl.uniformMatrix4fv(mvp,false,multiply(perspective(Math.PI/3,el.width/Math.max(1,el.height),.1,120),view(eye,target)))
@@ -130,7 +149,7 @@ function World3DPreview(){
     <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/20 bg-black/55 px-4 py-3 backdrop-blur">
       <div className="text-xs font-black tracking-[.24em] text-amber-300">GARRIVERSE 2026</div>
       <div className="mt-1 text-lg font-bold">Living Town · 3D prototype</div>
-      <div className="text-xs text-white/70">{hint}</div>
+      <div className="text-xs text-white/70">{hint} · Press E to interact</div>
     </div>
     <a href="/" className="absolute right-4 top-4 rounded-xl bg-black/60 px-4 py-3 text-sm font-semibold">← Back to town</a>
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-4 py-2 text-xs text-white/80">WASD / Arrow keys · Drag to look · Prototype preview</div>
