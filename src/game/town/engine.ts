@@ -39,7 +39,9 @@ function seeded(seed: number) {
 const inRect = (x: number, y: number, r: Rect, pad = 0) => x >= r.x - pad && x < r.x + r.w + pad && y >= r.y - pad && y < r.y + r.h + pad
 
 interface Tree { x: number; y: number; kind: 'palm' | 'round' | 'bush'; s: number }
-interface Npc { def: NpcDef; x: number; y: number; tx: number; ty: number; wait: number; dir: number; phase: number; moving: boolean; route: { x: number; y: number }[]; stop: number }
+export type FarmWorldState = { plots: { id: string; state: 'empty' | 'growing'; wateredAt: string | null; readyAt: string | null }[]; seeds: number; cassava: number; garri: number }
+
+interface Npc { def: Npc; x: number; y: number; tx: number; ty: number; wait: number; dir: number; phase: number; moving: boolean; route: { x: number; y: number }[]; stop: number }
 interface Decor { kind: 'lamp' | 'danfo' | 'flowers'; x: number; y: number; c?: string }
 
 export class TownEngine {
@@ -58,6 +60,7 @@ export class TownEngine {
   private posTimer = 0
   private dust: { x: number; y: number; v: number; a: number }[] = []
   private time = 0
+  private farm: FarmWorldState | null = null
   private vw = 0
   private vh = 0
   private zoom = 1.5
@@ -84,6 +87,7 @@ export class TownEngine {
 
   setAvatar(a: Avatar, name: string) { this.avatar = a; this.name = name }
   setFound(f: Set<string>) { this.found = f }
+  setFarm(farm: FarmWorldState | null) { this.farm = farm }
 
   // ─── world construction ──────────────────────────────────────────────────
   private buildWorld() {
@@ -387,22 +391,12 @@ export class TownEngine {
       }
   }
 
-  /** Visible cassava plots and irrigation make the farm district readable in-world. */
+  /** Render the four server-authoritative plots; no crop is shown as planted until loaded. */
   private drawFarmFields() {
     const ctx = this.ctx
     const x = 43 * T, y = 39.2 * T
-    // Packed-earth farm paths and plot borders
     ctx.fillStyle = '#9b7040'
     ctx.fillRect(x - 8, y + 2, 9 * T, 7 * T)
-    ctx.fillStyle = '#5b3d25'
-    for (let row = 0; row < 4; row++) {
-      const py = y + 18 + row * 43
-      ctx.fillRect(x + 10, py, 7.5 * T, 27)
-      ctx.fillStyle = '#bd8b4d'
-      ctx.fillRect(x + 10, py, 7.5 * T, 3)
-      ctx.fillStyle = '#5b3d25'
-    }
-    // Narrow blue irrigation channels with animated water highlights
     ctx.fillStyle = '#285d82'
     ctx.fillRect(x + 4, y + 8, 7, 6 * T)
     ctx.fillRect(x + 4, y + 6 * T, 7.5 * T, 7)
@@ -411,34 +405,67 @@ export class TownEngine {
       const wx = x + 5 + ((this.time * 18 + i * 31) % (7.2 * T))
       ctx.fillRect(wx, y + 8 + (i % 3) * 3, 10, 2)
     }
-    // Cassava stems, broad leaves and small growth-stage differences
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 8; col++) {
-        const px = x + 22 + col * 28 + (row % 2) * 5
-        const py = y + 29 + row * 43
-        const sway = Math.sin(this.time * 1.7 + row * 3 + col) * 2
-        const height = 9 + ((row * 5 + col * 3) % 4) * 2
+    const plots = this.farm?.plots ?? []
+    for (let i = 0; i < 4; i++) {
+      const plot = plots.find((p) => p.id === `plot-${i + 1}`)
+      const px = x + 18 + (i % 2) * 3.7 * T
+      const py = y + 18 + Math.floor(i / 2) * 3.05 * T
+      ctx.fillStyle = '#5b3d25'
+      ctx.fillRect(px, py, 3.25 * T, 2.55 * T)
+      ctx.fillStyle = '#bd8b4d'
+      ctx.fillRect(px, py, 3.25 * T, 4)
+      ctx.fillStyle = '#d3a56b'
+      ctx.font = '700 9px "Bricolage Grotesque", sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText(`PLOT ${i + 1}`, px + 5, py + 13)
+      if (!plot || plot.state === 'empty') {
+        ctx.strokeStyle = '#8a623b'
+        ctx.lineWidth = 2
+        for (let row = 0; row < 3; row++) {
+          ctx.beginPath()
+          ctx.moveTo(px + 8, py + 25 + row * 19)
+          ctx.lineTo(px + 3.15 * T - 8, py + 25 + row * 19)
+          ctx.stroke()
+        }
+        continue
+      }
+      const ready = !!plot.readyAt && Date.parse(plot.readyAt) <= Date.now()
+      const watered = !!plot.wateredAt
+      for (let row = 0; row < 3; row++) for (let col = 0; col < 7; col++) {
+        const sx = px + 15 + col * 13, sy = py + 34 + row * 18
+        const height = ready ? 18 : watered ? 13 : 9
+        const sway = Math.sin(this.time * 1.7 + row * 2 + col) * 1.8
         ctx.strokeStyle = '#76502d'
         ctx.lineWidth = 2
         ctx.beginPath()
-        ctx.moveTo(px, py + 8)
-        ctx.lineTo(px + sway * 0.25, py - height)
+        ctx.moveTo(sx, sy + 7)
+        ctx.lineTo(sx + sway * 0.2, sy - height)
         ctx.stroke()
-        for (let leaf = 0; leaf < 5; leaf++) {
-          const a = (leaf / 5) * Math.PI * 2 + this.time * 0.18 + col
+        for (let leaf = 0; leaf < 4; leaf++) {
           ctx.save()
-          ctx.translate(px + sway * 0.25, py - height)
-          ctx.rotate(a)
-          ctx.fillStyle = leaf % 2 ? '#2f7d3a' : '#4b9b46'
+          ctx.translate(sx + sway * 0.2, sy - height)
+          ctx.rotate((leaf / 4) * Math.PI * 2 + this.time * 0.15)
+          ctx.fillStyle = ready ? '#70b84d' : '#438c3d'
           ctx.beginPath()
-          ctx.ellipse(7, 0, 8, 3, 0, 0, Math.PI * 2)
+          ctx.ellipse(6, 0, ready ? 7 : 5, 2.5, 0, 0, Math.PI * 2)
           ctx.fill()
           ctx.restore()
         }
       }
+      if (watered) {
+        ctx.fillStyle = '#8bd7f0'
+        ctx.beginPath()
+        ctx.arc(px + 3.05 * T, py + 17, 4, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      if (ready) {
+        ctx.fillStyle = '#f2b632'
+        ctx.font = '700 8px "Bricolage Grotesque", sans-serif'
+        ctx.textAlign = 'right'
+        ctx.fillText('READY', px + 3.2 * T, py + 14)
+      }
     }
-    // District marker
-    ctx.fillStyle = 'rgba(18,15,46,0.82)'
+    ctx.fillStyle = 'rgba(18,15,46,0.88)'
     ctx.beginPath()
     ctx.roundRect(x + 2.4 * T, y + 6.2 * T, 116, 20, 6)
     ctx.fill()
@@ -446,7 +473,7 @@ export class TownEngine {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillStyle = '#f2b632'
-    ctx.fillText('CASSAVA FIELDS', x + 2.4 * T + 58, y + 6.2 * T + 10)
+    ctx.fillText(this.farm ? 'LIVE CASSAVA FARM' : 'FARM · CONNECTING', x + 2.4 * T + 58, y + 6.2 * T + 10)
   }
 
   private drawPlaza() {
