@@ -152,7 +152,21 @@ function World3DPreview(){
       <div className="text-xs text-white/70">{hint} · Press E to interact</div>
     </div>
     <a href="/" className="absolute right-4 top-4 rounded-xl bg-black/60 px-4 py-3 text-sm font-semibold">← Back to town</a>
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-4 py-2 text-xs text-white/80">WASD / Arrow keys · Drag to look · Prototype preview</div>
+    <div className="absolute bottom-5 left-5 grid grid-cols-3 gap-2 select-none">
+      <span />
+      <button aria-label="Move forward" className="h-12 w-12 rounded-xl border border-white/30 bg-black/65 text-xl font-bold" onPointerDown={()=>window.dispatchEvent(new KeyboardEvent("keydown",{key:"w"}))} onPointerUp={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))} onPointerLeave={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))}>↑</button>
+      <span />
+      {(["a","s","d"] as const).map(k=><button key={k} aria-label={k==="a"?"Move left":k==="s"?"Move backward":"Move right"} className="h-12 w-12 rounded-xl border border-white/30 bg-black/65 text-xl font-bold" onPointerDown={()=>window.dispatchEvent(new KeyboardEvent("keydown",{key:k}))} onPointerUp={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:k}))} onPointerLeave={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:k}))}>{k==="a"?"←":k==="s"?"↓":"→"}</button>)}
+    </div>
+    <div className="absolute bottom-5 right-5 flex max-w-[min(55vw,22rem)] flex-col items-end gap-2">
+      <div className="rounded-xl border border-white/15 bg-black/75 px-3 py-3 text-xs text-white/90 backdrop-blur">
+        <div className="mb-1 font-bold text-amber-300">WORLD GUIDE</div>
+        <div>{interaction}</div>
+        <div className="mt-2 text-white/55">Drag to look · Press E or tap INTERACT</div>
+      </div>
+      <button className="rounded-xl border border-amber-300/50 bg-amber-400 px-5 py-3 text-sm font-black text-black shadow-lg" onClick={()=>window.dispatchEvent(new KeyboardEvent("keydown",{key:"e"}))}>INTERACT · E</button>
+    </div>
+    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-4 py-2 text-xs text-white/80">WASD / Arrow keys · Drag to look</div>
     {error&&<div role="alert" className="absolute bottom-20 left-4 right-4 rounded-xl bg-red-950/90 p-3 text-sm">{error}</div>}
   </main>
 }
