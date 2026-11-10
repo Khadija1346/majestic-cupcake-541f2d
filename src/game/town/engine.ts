@@ -39,7 +39,7 @@ function seeded(seed: number) {
 const inRect = (x: number, y: number, r: Rect, pad = 0) => x >= r.x - pad && x < r.x + r.w + pad && y >= r.y - pad && y < r.y + r.h + pad
 
 interface Tree { x: number; y: number; kind: 'palm' | 'round' | 'bush'; s: number }
-interface Npc { def: NpcDef; x: number; y: number; tx: number; ty: number; wait: number; dir: number; phase: number; moving: boolean }
+interface Npc { def: NpcDef; x: number; y: number; tx: number; ty: number; wait: number; dir: number; phase: number; moving: boolean; route: { x: number; y: number }[]; stop: number }
 interface Decor { kind: 'lamp' | 'danfo' | 'flowers'; x: number; y: number; c?: string }
 
 export class TownEngine {
@@ -135,7 +135,20 @@ export class TownEngine {
     }
     for (const t of this.trees) if (t.kind !== 'bush') this.solids.push({ x: t.x * T - 6, y: t.y * T - 6, w: 12, h: 8 })
 
-    this.npcs = NPCS.map((def) => ({ def, x: def.x * T, y: def.y * T, tx: def.x * T, ty: def.y * T, wait: Math.random() * 2, dir: 0, phase: 0, moving: false }))
+    // Residents follow role-based daily routes instead of wandering randomly.
+    const routes: Record<string, [number, number][]> = {
+      elder: [[35, 20], [35, 25.5], [29, 26.5], [33.5, 18.5]],
+      aisha: [[27, 19.5], [25.5, 20.5], [28.5, 24.5], [26, 17.5]],
+      tunde: [[29, 12], [34, 14.5], [35, 18], [30, 15]],
+      nkechi: [[18, 33.5], [20, 25.5], [23, 29], [16, 30]],
+      emeka: [[44, 23.5], [48, 24.5], [44, 27], [40, 24.5]],
+      zainab: [[48, 42], [45, 41], [51, 40.5], [49, 44.5]],
+      kola: [[49, 22.8], [51, 24.5], [46, 24.5], [44, 23.5]],
+    }
+    this.npcs = NPCS.map((def) => {
+      const route = (routes[def.id] ?? [[def.x, def.y]]).map(([x, y]) => ({ x: x * T, y: y * T }))
+      return { def, x: def.x * T, y: def.y * T, tx: route[0].x, ty: route[0].y, wait: 1.2, dir: 0, phase: 0, moving: false, route, stop: 0 }
+    })
   }
 
   // ─── lifecycle ───────────────────────────────────────────────────────────
@@ -223,16 +236,27 @@ export class TownEngine {
       if (near || this.paused) { n.moving = false; continue }
       if (n.wait > 0) { n.wait -= dt; n.moving = false; continue }
       const ddx = n.tx - n.x, ddy = n.ty - n.y, d = Math.hypot(ddx, ddy)
-      if (d < 2) {
-        n.wait = 1.5 + Math.random() * 3
-        const a = Math.random() * Math.PI * 2, r = Math.random() * n.def.range * T
-        n.tx = n.def.x * T + Math.cos(a) * r
-        n.ty = n.def.y * T + Math.sin(a) * r
+      if (d < 3) {
+        // Pause at work/home points, then continue to the next stop on the route.
+        n.wait = 2.5 + ((n.stop + this.npcs.indexOf(n)) % 4) * 1.1
+        n.stop = (n.stop + 1) % n.route.length
+        const target = n.route[n.stop]
+        n.tx = target.x
+        n.ty = target.y
         continue
       }
-      const sp = 38 * dt
+      const sp = 42 * dt
       const nx = n.x + (ddx / d) * sp, ny = n.y + (ddy / d) * sp
-      if (this.collides(nx, ny)) { n.tx = n.x; n.ty = n.y; continue }
+      if (this.collides(nx, ny)) {
+        // A blocked waypoint is skipped rather than trapping the resident.
+        n.stop = (n.stop + 1) % n.route.length
+        const target = n.route[n.stop]
+        n.tx = target.x
+        n.ty = target.y
+        n.wait = 0.35
+        n.moving = false
+        continue
+      }
       n.x = nx; n.y = ny; n.moving = true; n.phase += dt * 8
       n.dir = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 1 : 3) : ddy > 0 ? 0 : 2
     }
