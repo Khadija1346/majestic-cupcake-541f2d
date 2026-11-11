@@ -110,7 +110,7 @@ function World3DPreview(){
         {a:[-14,-1],b:[-8,-7],phase:4.4,color:[.58,.28,.62] as V3,role:'processor'},
         {a:[2,-16],b:[-3,-10],phase:5.2,color:[.72,.72,.62] as V3,role:'resident'}
       ]
-      let px=0,pz=13,yaw=0,drag=false,lastX=0,lastY=0,frame=0,lastFrame=0
+      let px=0,pz=13,yaw=0,drag=false,lastX=0,frame=0,lastFrame=0
       const keys=new Set<string>()
       const buildings=[{x:-11,z:-10,rx:5.2,rz:4.7},{x:8,z:-13,rx:5.7,rz:5.2},{x:13,z:8,rx:5.1,rz:4.7},{x:-15,z:12,rx:4.6,rz:4.5},{x:-18,z:-2,rx:4.7,rz:4.2}]
       const farmPoint={x:11,z:15}
