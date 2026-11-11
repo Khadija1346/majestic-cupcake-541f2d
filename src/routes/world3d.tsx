@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { farmAction, getFarm } from '@/server/farm.functions'
 
 export const Route = createFileRoute('/world3d')({ component: World3DPreview })
 
@@ -34,8 +35,16 @@ function view(eye:V3,target:V3) {
 function World3DPreview(){
   const canvas=useRef<HTMLCanvasElement>(null)
   const [error,setError]=useState('')
+  const [showFarm,setShowFarm]=useState(false)
+  const [showMarket,setShowMarket]=useState(false)
+  const [farm,setFarm]=useState<Awaited<ReturnType<typeof getFarm>> | null>(null)
+  const [farmBusy,setFarmBusy]=useState(false)
+  const [farmError,setFarmError]=useState('')
+  const [farmNow,setFarmNow]=useState(Date.now())
   const [interaction,setInteraction]=useState('Explore the village. Walk to the cassava plots and press E to open the Farm District.')
   const hint='Drag to look around · WASD to move'
+  useEffect(()=>{if(!showFarm&&!showMarket)return;let active=true;void getFarm().then(v=>{if(active)setFarm(v)}).catch(e=>{if(active)setFarmError(e instanceof Error?e.message:'Farm could not load.')});const clock=window.setInterval(()=>setFarmNow(Date.now()),1000);return()=>{active=false;window.clearInterval(clock)}},[showFarm,showMarket])
+  const actFarm=async(action:'plant'|'water'|'harvest'|'process',plotId?:string)=>{if(farmBusy)return;setFarmBusy(true);setFarmError('');try{setFarm(await farmAction({data:{action,plotId}}))}catch(e){setFarmError(e instanceof Error?e.message:'Farm action failed.')}finally{setFarmBusy(false)}}
   useEffect(()=>{
     const el=canvas.current, gl=el?.getContext('webgl',{antialias:true})
     if(!el||!gl){setError('This browser could not start WebGL. Try Chrome with hardware acceleration enabled.');return}
@@ -109,9 +118,9 @@ function World3DPreview(){
           const farmDistance=Math.hypot(px-farmPoint.x,pz-farmPoint.z)
           const marketDistance=Math.hypot(px-13,pz-8)
           const millDistance=Math.hypot(px+18,pz+2)
-          if(farmDistance<5){setInteraction('Farm District selected. Opening the live Farm page for planting, watering, harvesting and processing.');window.location.href='/farm';return}
-          if(marketDistance<6)setInteraction('Market Square: this location is a world preview. Trading is not enabled yet.')
-          else if(millDistance<6)setInteraction('Garri Processing Shed: processing gameplay is not connected to this 3D scene yet.')
+          if(farmDistance<5){setInteraction('Farm District opened. Manage your cassava plots here.');setShowFarm(true);return}
+          if(marketDistance<6){setInteraction('Market Square opened. Check your stored harvest and market status.');setShowMarket(true)}
+          else if(millDistance<6){setInteraction('Processing Shed opened. Turn your harvested cassava into garri.');setShowFarm(true)}
           else setInteraction('Move closer to the cassava plots, market or processing shed to interact.')
         }
         keys.add(key)
@@ -152,6 +161,12 @@ function World3DPreview(){
       <div className="text-xs text-white/70">{hint} · Press E to interact</div>
     </div>
     <a href="/" className="absolute right-4 top-4 rounded-xl bg-black/60 px-4 py-3 text-sm font-semibold">← Back to town</a>
+    {showMarket&&<div className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 p-3"><section className="w-full max-w-lg rounded-2xl border border-amber-300/30 bg-[#17251d] p-4 text-white"><div className="flex items-start justify-between"><div><div className="text-xs font-black tracking-widest text-amber-300">GARRIVERSE MARKET SQUARE</div><h2 className="text-xl font-black">Harvest inventory</h2></div><button onClick={()=>setShowMarket(false)}>Close ✕</button></div>{farm?<><div className="mt-4 grid grid-cols-3 gap-2 text-center">{[["Cassava",farm.cassava],["Garri",farm.garri],["Stems",farm.seeds]].map(([label,value])=><div key={String(label)} className="rounded-xl bg-white/10 p-3"><b className="text-xl text-amber-300">{value}</b><div className="text-xs">{label}</div></div>)}</div><p className="mt-4 text-sm text-white/75">Your harvest is saved in your farm ledger. Market trading and $GARRI payouts are not enabled yet, so no sale or wallet transaction will be simulated here.</p></>:<p className="py-6 text-center text-sm text-white/70">Open the Market again in a moment while your inventory loads.</p>}<button onClick={()=>{setShowMarket(false);setShowFarm(true)}} className="mt-4 w-full rounded-lg bg-amber-400 p-3 text-sm font-bold text-black">Manage farm and process garri</button></section></div>}
+    {showFarm&&<div className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 p-3"><section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-amber-300/30 bg-[#17251d] p-4 text-white"><div className="flex justify-between"><div><div className="text-xs font-black tracking-widest text-amber-300">GARRIVERSE FARM DISTRICT</div><h2 className="text-xl font-black">Cassava fields</h2></div><button onClick={()=>setShowFarm(false)}>Close ✕</button></div>
+    {farm?<><div className="mt-3 grid grid-cols-3 gap-2 text-center">{[['Stems',farm.seeds],['Cassava',farm.cassava],['Garri',farm.garri]].map(([label,value])=><div key={String(label)} className="rounded-xl bg-white/10 p-3"><b className="text-xl text-amber-300">{value}</b><div className="text-xs">{label}</div></div>)}</div>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">{farm.plots.map((plot,index)=>{const remaining=plot.readyAt?Math.max(0,Date.parse(plot.readyAt)-farmNow):0;const ready=plot.state==='growing'&&remaining===0;return <div key={plot.id} className="rounded-xl border border-white/10 p-3"><div className="flex justify-between text-sm"><b>Plot {index+1}</b><span>{plot.state==='empty'?'Empty':ready?'Ready':Math.ceil(remaining/60000)+'m left'}</span></div><div className="my-2 text-center text-3xl">{plot.state==='empty'?'🟫':ready?'🌾':plot.wateredAt?'🌱💧':'🌱'}</div>{plot.state==='empty'?<button disabled={farmBusy||farm.seeds<1} onClick={()=>void actFarm('plant',plot.id)} className="w-full rounded-lg bg-amber-400 p-2 text-sm font-bold text-black disabled:opacity-40">Plant cassava</button>:<div className="grid grid-cols-2 gap-2">{!plot.wateredAt&&!ready&&<button disabled={farmBusy} onClick={()=>void actFarm('water',plot.id)} className="rounded-lg bg-white/10 p-2 text-xs">Water</button>}<button disabled={farmBusy||!ready} onClick={()=>void actFarm('harvest',plot.id)} className="rounded-lg bg-amber-400 p-2 text-xs font-bold text-black disabled:opacity-40">Harvest</button></div>}</div>})}</div>
+    <div className="mt-3 flex items-center justify-between rounded-xl bg-white/10 p-3"><div><b>Processing shed</b><div className="text-xs">3 cassava → 1 garri</div></div><button disabled={farmBusy||farm.cassava<3} onClick={()=>void actFarm('process')} className="rounded-lg bg-amber-400 px-3 py-2 text-sm font-bold text-black disabled:opacity-40">Process garri</button></div></>:<div className="py-8 text-center">Loading farm ledger…</div>}
+    {farmError&&<div role="alert" className="mt-3 rounded-lg bg-red-950 p-3 text-sm">{farmError}</div>}<p className="mt-3 text-center text-xs text-white/50">Server-saved in-game resources. No token or cash payouts.</p></section></div>}
     <div className="absolute bottom-5 left-5 grid grid-cols-3 gap-2 select-none">
       <span />
       <button aria-label="Move forward" className="h-12 w-12 rounded-xl border border-white/30 bg-black/65 text-xl font-bold" onPointerDown={()=>window.dispatchEvent(new KeyboardEvent("keydown",{key:"w"}))} onPointerUp={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))} onPointerLeave={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))}>↑</button>

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Map as MapIcon, ScrollText, X } from 'lucide-react'
+import { Compass, Map as MapIcon, ScrollText, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TownEngine, type Focus, type FarmWorldState } from '@/game/town/engine'
 import { getFarm } from '@/server/farm.functions'
@@ -154,6 +154,9 @@ export function TownView() {
         <Link to="/quests" className="panel relative grid h-12 w-12 place-items-center !rounded-2xl" aria-label="Quests">
           <ScrollText size={20} />
           {claimable > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-gold px-1 text-[10px] font-black text-ink">{claimable}</span>}
+        </Link>
+        <Link to="/world3d" className="panel grid h-12 w-12 place-items-center !rounded-2xl text-gold" aria-label="Explore 3D village" title="Explore 3D village">
+          <Compass size={20} />
         </Link>
         <button onClick={() => setShowMap(true)} className="panel grid h-12 w-12 place-items-center !rounded-2xl" aria-label="Town map">
           <MapIcon size={20} />
