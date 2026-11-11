@@ -1,0 +1,323 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react'
+
+export const Route = createFileRoute('/world3d-babylon')({ component: BabylonWorld })
+
+declare global {
+  interface Window { BABYLON?: any }
+}
+
+function BabylonWorld() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const keys = useRef(new Set<string>())
+  const [status, setStatus] = useState('Loading the new 3D world…')
+  const [nearby, setNearby] = useState('')
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let disposed = false
+    let engine: any
+    let scene: any
+    let frame: number | undefined
+    let lastTime = 0
+    let drag = false
+    let lastX = 0
+    let lastY = 0
+    let camera: any
+    let player: any
+    let playerYaw = 0
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const start = async () => {
+      try {
+        if (!window.BABYLON) {
+          await new Promise<void>((resolve, reject) => {
+            const existing = document.querySelector<HTMLScriptElement>('script[data-garriverse-babylon]')
+            if (existing && window.BABYLON) return resolve()
+            const script = existing ?? document.createElement('script')
+            script.src = 'https://cdn.babylonjs.com/babylon.js'
+            script.async = true
+            script.dataset.garriverseBabylon = 'true'
+            script.onload = () => resolve()
+            script.onerror = () => reject(new Error('Babylon.js could not load. Check your internet connection and reload.'))
+            if (!existing) document.head.appendChild(script)
+          })
+        }
+        if (disposed) return
+        const B = window.BABYLON
+        if (!B) throw new Error('Babylon.js did not initialize.')
+        engine = new B.Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true, adaptToDeviceRatio: true }, true)
+        scene = new B.Scene(engine)
+        scene.clearColor = new B.Color4(0.48, 0.72, 0.88, 1)
+        scene.collisionsEnabled = true
+        scene.gravity = new B.Vector3(0, -0.25, 0)
+        scene.fogMode = B.Scene.FOGMODE_EXP2
+        scene.fogDensity = 0.003
+        scene.fogColor = new B.Color3(0.68, 0.78, 0.67)
+
+        const hemi = new B.HemisphericLight('sunFill', new B.Vector3(0, 1, 0), scene)
+        hemi.intensity = 0.82
+        const sun = new B.DirectionalLight('afternoonSun', new B.Vector3(-0.45, -1, 0.3), scene)
+        sun.position = new B.Vector3(25, 35, -20)
+        sun.intensity = 1.25
+
+        const mat = (name: string, color: string, roughness = 0.9) => {
+          const m = new B.StandardMaterial(name, scene)
+          m.diffuseColor = B.Color3.FromHexString(color)
+          m.specularColor = new B.Color3(0.12, 0.12, 0.12)
+          m.roughness = roughness
+          return m
+        }
+        const grass = mat('savanna grass', '#638b45')
+        const path = mat('warm earth road', '#bd8959')
+        const soil = mat('rich cassava soil', '#70452b')
+        const leaf = mat('cassava leaves', '#397b37')
+        const leafLight = mat('young leaves', '#6b9c3d')
+        const wood = mat('timber', '#69432b')
+        const wallA = mat('clay plaster', '#d3a06d')
+        const wallB = mat('sun baked cream', '#e2c28c')
+        const roof = mat('terracotta roof', '#8c4630')
+        const blue = mat('water', '#3b91c5', 0.35)
+        const dark = mat('dark fabric', '#29313a')
+        const skin = mat('warm skin', '#8c5638')
+        const cloths = ['#c65b32', '#286c67', '#d6a53c', '#5865a5', '#8b5a88'].map((c, i) => mat('cloth ' + i, c))
+
+        const ground = B.MeshBuilder.CreateGround('village ground', { width: 110, height: 110, subdivisions: 2 }, scene)
+        ground.material = grass
+        ground.checkCollisions = true
+
+        const box = (name: string, x: number, y: number, z: number, w: number, h: number, d: number, material: any) => {
+          const mesh = B.MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene)
+          mesh.position.set(x, y + h / 2, z)
+          mesh.material = material
+          mesh.checkCollisions = true
+          return mesh
+        }
+        const road = (name: string, x: number, z: number, w: number, d: number) => {
+          const m = B.MeshBuilder.CreateGround(name, { width: w, height: d }, scene)
+          m.position.set(x, 0.025, z)
+          m.material = path
+          return m
+        }
+        road('main village road', 0, 0, 9, 95)
+        road('cross village road', 0, 0, 85, 7)
+        road('farm lane', 22, 20, 8, 37)
+
+        const house = (x: number, z: number, wall: any, scale = 1) => {
+          box('village home', x, 0, z, 8 * scale, 3.4 * scale, 7 * scale, wall)
+          const r = B.MeshBuilder.CreateBox('pitched clay roof', { width: 9 * scale, height: 0.55 * scale, depth: 8 * scale }, scene)
+          r.position.set(x, 3.55 * scale, z)
+          r.rotation.z = -0.13
+          r.material = roof
+          const door = box('wooden doorway', x, 0, z - 3.56 * scale, 1.35 * scale, 2.35 * scale, 0.12, wood)
+          door.checkCollisions = false
+          for (let n = -1; n <= 1; n++) {
+            const window = box('window', x + n * 2.3 * scale, 1.45 * scale, z - 3.58 * scale, 0.9 * scale, 0.85 * scale, 0.08, blue)
+            window.checkCollisions = false
+          }
+        }
+        house(-17, -14, wallA, 1.05)
+        house(17, -16, wallB, 1.1)
+        house(-19, 14, wallB, 0.92)
+        house(18, 15, wallA, 1)
+        house(-34, -2, wallA, 0.85)
+
+        const palm = (x: number, z: number) => {
+          const trunk = B.MeshBuilder.CreateCylinder('palm trunk', { height: 5.4, diameterTop: 0.32, diameterBottom: 0.58, tessellation: 8 }, scene)
+          trunk.position.set(x, 2.7, z)
+          trunk.material = wood
+          for (let i = 0; i < 7; i++) {
+            const frond = B.MeshBuilder.CreateCylinder('palm frond', { height: 3.4, diameterTop: 0.04, diameterBottom: 0.19, tessellation: 5 }, scene)
+            frond.position.set(x + Math.cos(i * Math.PI / 3.5) * 1.25, 5.25, z + Math.sin(i * Math.PI / 3.5) * 1.25)
+            frond.rotation.z = Math.PI / 2.7
+            frond.rotation.y = i * Math.PI / 3.5
+            frond.material = leaf
+          }
+        }
+        for (const [x, z] of [[-29,-22],[-7,-25],[28,-25],[32,4],[-30,24],[7,31],[30,28],[-4,17]]) palm(x, z)
+
+        // A real, walkable cassava field with repeated ridges and leafy plants.
+        for (let row = 0; row < 5; row++) {
+          for (let col = 0; col < 6; col++) {
+            const x = 19 + col * 2.5
+            const z = 12 + row * 3
+            const bed = B.MeshBuilder.CreateGround('cassava ridge', { width: 2.15, height: 2.45 }, scene)
+            bed.position.set(x, 0.08, z)
+            bed.material = soil
+            const stem = B.MeshBuilder.CreateCylinder('cassava stem', { height: 1.15, diameterTop: 0.1, diameterBottom: 0.16, tessellation: 6 }, scene)
+            stem.position.set(x, 0.66, z)
+            stem.material = wood
+            for (let leafIndex = 0; leafIndex < 5; leafIndex++) {
+              const l = B.MeshBuilder.CreateSphere('cassava leaf', { diameter: 0.85, segments: 5 }, scene)
+              l.scaling.set(0.42, 0.1, 1)
+              l.position.set(x + Math.cos(leafIndex * 1.25) * 0.48, 1.08 + (leafIndex % 2) * 0.12, z + Math.sin(leafIndex * 1.25) * 0.48)
+              l.rotation.y = leafIndex * 1.25
+              l.material = leafIndex % 2 ? leafLight : leaf
+            }
+          }
+        }
+
+        // Well, processing shed and market stalls.
+        const well = B.MeshBuilder.CreateCylinder('village well', { height: 0.75, diameter: 2.8, tessellation: 20 }, scene)
+        well.position.set(-2, 0.38, 13)
+        well.material = wood
+        const water = B.MeshBuilder.CreateCylinder('well water', { height: 0.08, diameter: 2.25, tessellation: 24 }, scene)
+        water.position.set(-2, 0.8, 13)
+        water.material = blue
+        box('processing shed', 33, 0, 0, 11, 4, 10, wallA)
+        const millRoof = B.MeshBuilder.CreateBox('processing shed roof', { width: 12, height: 0.6, depth: 11 }, scene)
+        millRoof.position.set(33, 4.1, 0); millRoof.material = roof
+        for (let i = 0; i < 4; i++) {
+          box('market stall counter', -31 + i * 4, 0, 8, 3.4, 1.1, 2, wood)
+          const canopy = B.MeshBuilder.CreateBox('market canopy', { width: 3.8, height: 0.2, depth: 2.6 }, scene)
+          canopy.position.set(-31 + i * 4, 2.6, 8); canopy.material = i % 2 ? roof : wallB
+        }
+
+        const makePerson = (name: string, color: any, x: number, z: number) => {
+          const root = new B.TransformNode(name, scene)
+          const torso = B.MeshBuilder.CreateCapsule(name + ' body', { height: 1.25, radius: 0.34 }, scene)
+          torso.parent = root; torso.position.y = 1.12; torso.material = color
+          const head = B.MeshBuilder.CreateSphere(name + ' head', { diameter: 0.55, segments: 10 }, scene)
+          head.parent = root; head.position.y = 2.05; head.material = skin
+          const legs: any[] = []
+          for (let i = 0; i < 2; i++) {
+            const leg = B.MeshBuilder.CreateCylinder(name + ' leg', { height: 0.72, diameter: 0.18 }, scene)
+            leg.parent = root; leg.position.set(i ? 0.18 : -0.18, 0.38, 0); leg.material = dark; legs.push(leg)
+          }
+          const arms: any[] = []
+          for (let i = 0; i < 2; i++) {
+            const arm = B.MeshBuilder.CreateCylinder(name + ' arm', { height: 0.72, diameter: 0.14 }, scene)
+            arm.parent = root; arm.position.set(i ? 0.43 : -0.43, 1.25, 0); arm.rotation.z = i ? -0.18 : 0.18; arm.material = color; arms.push(arm)
+          }
+          root.position.set(x, 0, z)
+          return { root, legs, arms, home: new B.Vector3(x, 0, z), phase: Math.random() * 6, speed: 0.55 + Math.random() * 0.35 }
+        }
+        const playerMat = mat('player outfit', '#e66b38')
+        player = makePerson('player citizen', playerMat, 0, 3)
+        const npcData = [
+          makePerson('farmer', cloths[1], 18, 9),
+          makePerson('market trader', cloths[2], -28, 4),
+          makePerson('processor', cloths[3], 31, -8),
+          makePerson('resident', cloths[0], -8, -2),
+          makePerson('water carrier', cloths[4], 2, 16),
+          makePerson('village guard', dark, -12, 21),
+        ]
+        const cameraTarget = new B.Vector3(0, 1.1, 3)
+        camera = new B.ArcRotateCamera('third person camera', -Math.PI / 2, 1.12, 13, cameraTarget, scene)
+        camera.lowerRadiusLimit = 8
+        camera.upperRadiusLimit = 22
+        camera.lowerBetaLimit = 0.65
+        camera.upperBetaLimit = 1.42
+        camera.wheelPrecision = 80
+        camera.panningSensibility = 0
+        camera.attachControl(canvas, false)
+        camera.inputs.clear()
+
+        const onDown = (e: KeyboardEvent) => keys.current.add(e.key.toLowerCase())
+        const onUp = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase())
+        const pointerDown = (e: PointerEvent) => { drag = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId) }
+        const pointerMove = (e: PointerEvent) => {
+          if (!drag) return
+          camera.alpha -= (e.clientX - lastX) * 0.006
+          camera.beta = Math.max(0.68, Math.min(1.4, camera.beta + (e.clientY - lastY) * 0.004))
+          lastX = e.clientX; lastY = e.clientY
+        }
+        const pointerUp = () => { drag = false }
+        window.addEventListener('keydown', onDown)
+        window.addEventListener('keyup', onUp)
+        canvas.addEventListener('pointerdown', pointerDown)
+        canvas.addEventListener('pointermove', pointerMove)
+        canvas.addEventListener('pointerup', pointerUp)
+        canvas.addEventListener('pointercancel', pointerUp)
+
+        scene.onBeforeRenderObservable.add(() => {
+          const now = performance.now()
+          const dt = Math.min(0.04, lastTime ? (now - lastTime) / 1000 : 0.016)
+          lastTime = now
+          const input = keys.current
+          let forward = Number(input.has('w') || input.has('arrowup')) - Number(input.has('s') || input.has('arrowdown'))
+          let side = Number(input.has('d') || input.has('arrowright')) - Number(input.has('a') || input.has('arrowleft'))
+          const length = Math.hypot(forward, side) || 1
+          forward /= length; side /= length
+          const angle = camera.alpha
+          const vx = (-Math.sin(angle) * forward + Math.cos(angle) * side) * 5.2 * dt
+          const vz = (-Math.cos(angle) * forward - Math.sin(angle) * side) * 5.2 * dt
+          player.position.x = Math.max(-43, Math.min(43, player.position.x + vx))
+          player.position.z = Math.max(-43, Math.min(43, player.position.z + vz))
+          if (Math.abs(vx) + Math.abs(vz) > 0.001) {
+            playerYaw = Math.atan2(vx, vz)
+            player.rotation.y = playerYaw
+            const swing = Math.sin(now * 0.012) * 0.48
+            player.getChildMeshes().filter((m: any) => m.name.includes('leg')).forEach((m: any, i: number) => { m.rotation.x = i ? swing : -swing })
+            player.getChildMeshes().filter((m: any) => m.name.includes('arm')).forEach((m: any, i: number) => { m.rotation.x = i ? -swing * 0.7 : swing * 0.7 })
+          }
+          camera.target.copyFrom(player.position.add(new B.Vector3(0, 1.15, 0)))
+          npcData.forEach((npc, i) => {
+            const phase = now * 0.00022 * npc.speed + npc.phase
+            const x = npc.home.x + Math.sin(phase) * (i % 2 ? 3.5 : 5)
+            const z = npc.home.z + Math.cos(phase * 0.8) * 2.5
+            npc.root.position.x = x; npc.root.position.z = z
+            npc.root.rotation.y = Math.atan2(Math.cos(phase) * 3.5, -Math.sin(phase) * 2.5)
+            const swing = Math.sin(now * 0.006 * npc.speed + npc.phase) * 0.38
+            npc.legs.forEach((m: any, j: number) => { m.rotation.x = j ? swing : -swing })
+            npc.arms.forEach((m: any, j: number) => { m.rotation.x = j ? -swing : swing })
+          })
+          const dFarm = B.Vector3.Distance(player.position, new B.Vector3(23, 0, 17))
+          const dMarket = B.Vector3.Distance(player.position, new B.Vector3(-25, 0, 8))
+          const dMill = B.Vector3.Distance(player.position, new B.Vector3(33, 0, 0))
+          const next = dFarm < 7 ? 'Farm District' : dMarket < 7 ? 'Market Square' : dMill < 8 ? 'Processing Shed' : ''
+          setNearby((old: string) => old === next ? old : next)
+        })
+
+        engine.runRenderLoop(() => { if (!disposed) scene.render() })
+        window.addEventListener('resize', () => engine?.resize())
+        setReady(true)
+        setStatus('Walk through the village. Move with the pad and drag to turn the camera.')
+        return () => {
+          window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp)
+          canvas.removeEventListener('pointerdown', pointerDown); canvas.removeEventListener('pointermove', pointerMove)
+          canvas.removeEventListener('pointerup', pointerUp); canvas.removeEventListener('pointercancel', pointerUp)
+        }
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'The 3D world could not start.')
+      }
+    }
+    let removeInput: (() => void) | undefined
+    void start().then(cleanup => { removeInput = cleanup })
+    return () => {
+      disposed = true
+      removeInput?.()
+      if (frame) cancelAnimationFrame(frame)
+      scene?.dispose()
+      engine?.dispose()
+    }
+  }, [])
+
+  const press = (key: string, down: boolean) => {
+    if (down) keys.current.add(key)
+    else keys.current.delete(key)
+  }
+
+  return <main className="fixed inset-0 overflow-hidden bg-[#315c36] text-white">
+    <canvas ref={canvasRef} className="h-full w-full touch-none" aria-label="GARRIVERSE Babylon.js 3D village" />
+    <header className="pointer-events-none absolute left-3 right-3 top-3 rounded-2xl border border-white/20 bg-[#12251c]/85 p-4 shadow-xl backdrop-blur">
+      <div className="text-xs font-black tracking-[0.25em] text-amber-300">GARRIVERSE 2026 · NEW 3D ENGINE</div>
+      <div className="mt-1 text-xl font-black">Living Village</div>
+      <div className="mt-1 text-xs text-white/80">{status}</div>
+      {nearby && <div className="mt-2 inline-block rounded-full bg-amber-300 px-3 py-1 text-xs font-black text-black">Nearby: {nearby} · tap INTERACT</div>}
+    </header>
+    <a href="/world3d" className="absolute right-4 top-36 rounded-xl bg-black/65 px-4 py-3 text-sm font-bold">← Old preview</a>
+    <div className="absolute bottom-5 left-4 flex flex-col items-center gap-2 select-none">
+      <button aria-label="Move forward" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('w', true) }} onPointerUp={() => press('w', false)} onPointerCancel={() => press('w', false)} onPointerLeave={() => press('w', false)}>↑</button>
+      <div className="flex gap-2">
+        <button aria-label="Move left" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('a', true) }} onPointerUp={() => press('a', false)} onPointerCancel={() => press('a', false)} onPointerLeave={() => press('a', false)}>←</button>
+        <button aria-label="Move backward" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('s', true) }} onPointerUp={() => press('s', false)} onPointerCancel={() => press('s', false)} onPointerLeave={() => press('s', false)}>↓</button>
+        <button aria-label="Move right" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('d', true) }} onPointerUp={() => press('d', false)} onPointerCancel={() => press('d', false)} onPointerLeave={() => press('d', false)}>→</button>
+      </div>
+    </div>
+    <button className="absolute bottom-10 right-5 rounded-2xl bg-amber-400 px-6 py-4 font-black text-black shadow-xl active:scale-95" onClick={() => setStatus(nearby ? nearby + ' interaction is being connected to the saved game systems.' : 'Walk closer to the cassava farm, market or processing shed first.')}>INTERACT</button>
+    <div className="pointer-events-none absolute bottom-2 right-5 text-[10px] text-white/65">Drag anywhere on the world to look around</div>
+  </main>
+}
+
