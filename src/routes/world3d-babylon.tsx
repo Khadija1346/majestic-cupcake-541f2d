@@ -296,16 +296,16 @@ function BabylonWorld() {
           const angle = camera.alpha
           const vx = (-Math.sin(angle) * forward + Math.cos(angle) * side) * 5.2 * dt
           const vz = (-Math.cos(angle) * forward - Math.sin(angle) * side) * 5.2 * dt
-          player.position.x = Math.max(-43, Math.min(43, player.position.x + vx))
-          player.position.z = Math.max(-43, Math.min(43, player.position.z + vz))
+          player.root.position.x = Math.max(-43, Math.min(43, player.root.position.x + vx))
+          player.root.position.z = Math.max(-43, Math.min(43, player.root.position.z + vz))
           if (Math.abs(vx) + Math.abs(vz) > 0.001) {
             playerYaw = Math.atan2(vx, vz)
-            player.rotation.y = playerYaw
+            player.root.rotation.y = playerYaw
             const swing = Math.sin(now * 0.012) * 0.48
-            player.getChildMeshes().filter((m: any) => m.name.includes('leg')).forEach((m: any, i: number) => { m.rotation.x = i ? swing : -swing })
-            player.getChildMeshes().filter((m: any) => m.name.includes('arm')).forEach((m: any, i: number) => { m.rotation.x = i ? -swing * 0.7 : swing * 0.7 })
+            player.root.getChildMeshes().filter((m: any) => m.name.includes('leg')).forEach((m: any, i: number) => { m.rotation.x = i ? swing : -swing })
+            player.root.getChildMeshes().filter((m: any) => m.name.includes('arm')).forEach((m: any, i: number) => { m.rotation.x = i ? -swing * 0.7 : swing * 0.7 })
           }
-          camera.target.copyFrom(player.position.add(new B.Vector3(0, 1.15, 0)))
+          camera.target.copyFrom(player.root.position.add(new B.Vector3(0, 1.15, 0)))
           npcData.forEach((npc, i) => {
             const phase = now * 0.00022 * npc.speed + npc.phase
             const x = npc.home.x + Math.sin(phase) * (i % 2 ? 3.5 : 5)
@@ -316,11 +316,11 @@ function BabylonWorld() {
             npc.legs.forEach((m: any, j: number) => { m.rotation.x = j ? swing : -swing })
             npc.arms.forEach((m: any, j: number) => { m.rotation.x = j ? -swing : swing })
           })
-          const dFarm = B.Vector3.Distance(player.position, new B.Vector3(23, 0, 17))
-          const dMarket = B.Vector3.Distance(player.position, new B.Vector3(-25, 0, 8))
-          const dMill = B.Vector3.Distance(player.position, new B.Vector3(33, 0, 0))
-          const dWater = B.Vector3.Distance(player.position, new B.Vector3(-11, 0, 21))
-          const dOffice = B.Vector3.Distance(player.position, new B.Vector3(-34, 0, -27))
+          const dFarm = B.Vector3.Distance(player.root.position, new B.Vector3(23, 0, 17))
+          const dMarket = B.Vector3.Distance(player.root.position, new B.Vector3(-25, 0, 8))
+          const dMill = B.Vector3.Distance(player.root.position, new B.Vector3(33, 0, 0))
+          const dWater = B.Vector3.Distance(player.root.position, new B.Vector3(-11, 0, 21))
+          const dOffice = B.Vector3.Distance(player.root.position, new B.Vector3(-34, 0, -27))
           const next = dFarm < 7 ? 'Farm District' : dWater < 8 ? 'Water District' : dMarket < 8 ? 'Market Square' : dMill < 9 ? 'Processing District' : dOffice < 8 ? 'Moderator Office' : ''
           setNearby((old: string) => old === next ? old : next)
         })
