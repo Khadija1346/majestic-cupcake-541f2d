@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Compass, Map as MapIcon, ScrollText, X } from 'lucide-react'
+import { Compass, Map as MapIcon, ScrollText, Sparkles, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TownEngine, type Focus, type FarmWorldState } from '@/game/town/engine'
 import { getFarm } from '@/server/farm.functions'
@@ -157,6 +157,9 @@ export function TownView() {
         </Link>
         <Link to="/world3d" className="panel grid h-12 w-12 place-items-center !rounded-2xl text-gold" aria-label="Explore 3D village" title="Explore 3D village">
           <Compass size={20} />
+        </Link>
+        <Link to="/world3d-babylon" className="panel grid h-12 w-12 place-items-center !rounded-2xl text-amber-300" aria-label="Try new 3D world" title="Try new Babylon 3D world">
+          <Sparkles size={20} />
         </Link>
         <button onClick={() => setShowMap(true)} className="panel grid h-12 w-12 place-items-center !rounded-2xl" aria-label="Town map">
           <MapIcon size={20} />
