@@ -54,7 +54,7 @@ function World3DPreview(){
       if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program)||'3D renderer link failed')
       gl.useProgram(program)
       const vertices:number[]=[],colors:number[]=[]
-      const cube=(p:V3,s:V3,c:V3)=>{
+      const cube=(p:V3,s:V3,c:V3,targetVertices=vertices,targetColors=colors)=>{
         const [x,y,z]=p,[w,h,d]=s, faces=[
           [[0,0,1],[0,0,1],[1,0,1],[1,1,1],[0,1,1]],
           [[0,0,0],[1,0,0],[1,0,1],[1,1,1],[1,1,0]],
@@ -64,7 +64,7 @@ function World3DPreview(){
           [[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,0]]
         ]
         const tris=[[0,1,2,0,2,3]]
-        for(let f=0;f<faces.length;f++){const a=faces[f];for(const i of tris[0]){const q=a[i];vertices.push(x+q[0]*w,y+q[1]*h,z+q[2]*d);const light=[.82,1,.78,.92,.68,.74][f];colors.push(c[0]*light,c[1]*light,c[2]*light)}}
+        for(let f=0;f<faces.length;f++){const a=faces[f];for(const i of tris[0]){const q=a[i];targetVertices.push(x+q[0]*w,y+q[1]*h,z+q[2]*d);const light=[.82,1,.78,.92,.68,.74][f];targetColors.push(c[0]*light,c[1]*light,c[2]*light)}}
       }
       const things:Thing[]=[
         {p:[0,-.12,0],s:[70,.2,70],c:[.22,.42,.2]},
@@ -92,14 +92,7 @@ function World3DPreview(){
         things.push({p:[x,0,z],s:[.55,4,.55],c:[.38,.22,.11]})
         things.push({p:[x-1.8,3.7,z-1.8],s:[3.6,1.1,3.6],c:[.13,.38,.16]})
       }
-      // Stylised resident figures placed around the plaza and work areas.
-      const people:[number,number,number][]=[[-3,0,-5],[3,0,-4],[-7,0,5],[5,0,8],[15,0,3],[-14,0,-1]]
-      for(const [x,y,z] of people){
-        things.push({p:[x-.22,y,z-.18],s:[.44,1.05,.36],c:[.75,.25,.12]})
-        things.push({p:[x-.19,y+1.05,z-.16],s:[.38,.38,.34],c:[.35,.2,.12]})
-        things.push({p:[x-.28,y-.85,z-.12],s:[.2,.85,.22],c:[.12,.13,.18]})
-        things.push({p:[x+.08,y-.85,z-.12],s:[.2,.85,.22],c:[.12,.13,.18]})
-      }
+      // NPCs are rendered dynamically below so their walking/work animations update every frame.
       for(const t of things)cube(t.p,t.s,t.c)
       const vb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW)
       const pos=gl.getAttribLocation(program,'aPosition'), col=gl.getAttribLocation(program,'aColor')
@@ -108,6 +101,15 @@ function World3DPreview(){
       const cb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(colors),gl.STATIC_DRAW)
       gl.enableVertexAttribArray(col);gl.vertexAttribPointer(col,3,gl.FLOAT,false,0,0)
       const mvp=gl.getUniformLocation(program,'uMvp')
+      const npcPositionBuffer=gl.createBuffer()!,npcColorBuffer=gl.createBuffer()!
+      const npcRoutes=[
+        {a:[-3,-5],b:[3,-4],phase:0,color:[.78,.22,.12] as V3,role:'farmer'},
+        {a:[-7,5],b:[-12,1],phase:1.3,color:[.12,.48,.42] as V3,role:'resident'},
+        {a:[5,8],b:[11,10],phase:2.2,color:[.75,.58,.22] as V3,role:'trader'},
+        {a:[15,3],b:[10,13],phase:3.1,color:[.3,.34,.72] as V3,role:'water carrier'},
+        {a:[-14,-1],b:[-8,-7],phase:4.4,color:[.58,.28,.62] as V3,role:'processor'},
+        {a:[2,-16],b:[-3,-10],phase:5.2,color:[.72,.72,.62] as V3,role:'resident'}
+      ]
       let px=0,pz=13,yaw=0,drag=false,lastX=0,lastY=0,frame=0,lastFrame=0
       const keys=new Set<string>()
       const buildings=[{x:-11,z:-10,rx:5.2,rz:4.7},{x:8,z:-13,rx:5.7,rz:5.2},{x:13,z:8,rx:5.1,rz:4.7},{x:-15,z:12,rx:4.6,rz:4.5},{x:-18,z:-2,rx:4.7,rz:4.2}]
@@ -150,10 +152,36 @@ function World3DPreview(){
         const target:[number,number,number]=[px,1.1,pz]
         gl.uniformMatrix4fv(mvp,false,multiply(perspective(Math.PI/3,el.width/Math.max(1,el.height),.1,120),view(eye,target)))
         gl.drawArrays(gl.TRIANGLES,0,vertices.length/3)
+
+        // Procedural village residents: walk between work points, swing arms/legs, and bob while moving.
+        const npcVertices:number[]=[],npcColors:number[]=[]
+        const t=now/1000
+        for(const npc of npcRoutes){
+          const wave=(Math.sin(t*.32+npc.phase)+1)/2
+          const x=npc.a[0]+(npc.b[0]-npc.a[0])*wave
+          const z=npc.a[1]+(npc.b[1]-npc.a[1])*wave
+          const moving=Math.cos(t*.32+npc.phase)
+          const stride=Math.sin(t*4+npc.phase)*.22*moving
+          const bob=Math.abs(Math.sin(t*4+npc.phase))*.045*Math.abs(moving)
+          const skin:[number,number,number]=[.38,.22,.14]
+          cube([x-.23,.72+bob,z-.15],[.46,.66,.3],npc.color,npcVertices,npcColors)
+          cube([x-.18,1.4+bob,z-.14],[.36,.36,.28],skin,npcVertices,npcColors)
+          cube([x-.31,.78+bob+stride,z-.12],[.13,.55,.14],[.16,.17,.2],npcVertices,npcColors)
+          cube([x+.18,.78+bob-stride,z-.12],[.13,.55,.14],[.16,.17,.2],npcVertices,npcColors)
+          cube([x-.43,.82+bob-stride,z-.1],[.12,.5,.13],npc.color,npcVertices,npcColors)
+          cube([x+.31,.82+bob+stride,z-.1],[.12,.5,.13],npc.color,npcVertices,npcColors)
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER,npcPositionBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(npcVertices),gl.DYNAMIC_DRAW)
+        gl.vertexAttribPointer(pos,3,gl.FLOAT,false,0,0)
+        gl.bindBuffer(gl.ARRAY_BUFFER,npcColorBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(npcColors),gl.DYNAMIC_DRAW)
+        gl.vertexAttribPointer(col,3,gl.FLOAT,false,0,0)
+        gl.drawArrays(gl.TRIANGLES,0,npcVertices.length/3)
         frame=requestAnimationFrame(draw)
       }
       frame=requestAnimationFrame(draw)
-      return ()=>{cancelAnimationFrame(frame);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);el.removeEventListener('pointerdown',start);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);el.removeEventListener('pointercancel',end);gl.deleteBuffer(vb);gl.deleteBuffer(cb);gl.deleteProgram(program)}
+      return ()=>{cancelAnimationFrame(frame);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);el.removeEventListener('pointerdown',start);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);el.removeEventListener('pointercancel',end);gl.deleteBuffer(vb);gl.deleteBuffer(cb);gl.deleteBuffer(npcPositionBuffer);gl.deleteBuffer(npcColorBuffer);gl.deleteProgram(program)}
     }catch(e){setError(e instanceof Error?e.message:'3D scene could not start')}
   },[])
   return <main className="fixed inset-0 overflow-hidden bg-[#16251d] text-white">
