@@ -42,7 +42,7 @@ function World3DPreview(){
   const [farmError,setFarmError]=useState('')
   const [farmNow,setFarmNow]=useState(Date.now())
   const [interaction,setInteraction]=useState('Explore the village. Walk to the cassava plots and press E to open the Farm District.')
-  const hint='Drag to look around · WASD to move'
+  const hint='Use the movement pad · Drag the world to look around'
   useEffect(()=>{if(!showFarm&&!showMarket)return;let active=true;void getFarm().then(v=>{if(active)setFarm(v)}).catch(e=>{if(active)setFarmError(e instanceof Error?e.message:'Farm could not load.')});const clock=window.setInterval(()=>setFarmNow(Date.now()),1000);return()=>{active=false;window.clearInterval(clock)}},[showFarm,showMarket])
   const actFarm=async(action:'plant'|'water'|'harvest'|'process',plotId?:string)=>{if(farmBusy)return;setFarmBusy(true);setFarmError('');try{setFarm(await farmAction({data:{action,plotId}}))}catch(e){setFarmError(e instanceof Error?e.message:'Farm action failed.')}finally{setFarmBusy(false)}}
   useEffect(()=>{
@@ -108,7 +108,7 @@ function World3DPreview(){
       const cb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(colors),gl.STATIC_DRAW)
       gl.enableVertexAttribArray(col);gl.vertexAttribPointer(col,3,gl.FLOAT,false,0,0)
       const mvp=gl.getUniformLocation(program,'uMvp')
-      let px=0,pz=13,yaw=0,drag=false,lastX=0,frame=0
+      let px=0,pz=13,yaw=0,drag=false,lastX=0,lastY=0,frame=0,lastFrame=0
       const keys=new Set<string>()
       const buildings=[{x:-11,z:-10,rx:5.2,rz:4.7},{x:8,z:-13,rx:5.7,rz:5.2},{x:13,z:8,rx:5.1,rz:4.7},{x:-15,z:12,rx:4.6,rz:4.5},{x:-18,z:-2,rx:4.7,rz:4.2}]
       const farmPoint={x:11,z:15}
@@ -127,16 +127,17 @@ function World3DPreview(){
         keys.add(key)
       }
       const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase())
-      const start=(e:PointerEvent)=>{drag=true;lastX=e.clientX;el.setPointerCapture(e.pointerId)}
-      const move=(e:PointerEvent)=>{if(drag){yaw+=(e.clientX-lastX)*.006;lastX=e.clientX}}
+      const start=(e:PointerEvent)=>{drag=true;lastX=e.clientX;lastY=e.clientY;el.setPointerCapture(e.pointerId)}
+      const move=(e:PointerEvent)=>{if(drag){yaw+=(e.clientX-lastX)*.008;lastX=e.clientX;lastY=e.clientY}}
       const end=()=>drag=false
       window.addEventListener('keydown',down);window.addEventListener('keyup',up)
       el.addEventListener('pointerdown',start);el.addEventListener('pointermove',move);el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end)
-      const draw=()=>{
+      const draw=(now:number)=>{
+        const dt=Math.min(.04,lastFrame?((now-lastFrame)/1000):.016);lastFrame=now
         const w=el.clientWidth,h=el.clientHeight,dpr=Math.min(devicePixelRatio||1,1.5)
         if(el.width!==Math.round(w*dpr)||el.height!==Math.round(h*dpr)){el.width=Math.round(w*dpr);el.height=Math.round(h*dpr)}
         gl.viewport(0,0,el.width,el.height);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.48,.69,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)
-        const step=.12
+        const step=5.2*dt
         let dx=0,dz=0
         if(keys.has('w')||keys.has('arrowup')){dx+=Math.sin(yaw)*step;dz-=Math.cos(yaw)*step}
         if(keys.has('s')||keys.has('arrowdown')){dx-=Math.sin(yaw)*step;dz+=Math.cos(yaw)*step}
@@ -150,12 +151,14 @@ function World3DPreview(){
         gl.uniformMatrix4fv(mvp,false,multiply(perspective(Math.PI/3,el.width/Math.max(1,el.height),.1,120),view(eye,target)))
         gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);frame=requestAnimationFrame(draw)
       }
-      draw()
+      frame=requestAnimationFrame(draw)
+      }
+      frame=requestAnimationFrame(draw)
       return ()=>{cancelAnimationFrame(frame);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);el.removeEventListener('pointerdown',start);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);el.removeEventListener('pointercancel',end);gl.deleteBuffer(vb);gl.deleteBuffer(cb);gl.deleteProgram(program)}
     }catch(e){setError(e instanceof Error?e.message:'3D scene could not start')}
   },[])
   return <main className="fixed inset-0 overflow-hidden bg-[#16251d] text-white">
-    <canvas ref={canvas} className="h-full w-full touch-pan-y" aria-label="GARRIVERSE 3D village preview"/>
+    <canvas ref={canvas} className="h-full w-full touch-none" aria-label="GARRIVERSE 3D village preview"/>
     <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/20 bg-black/55 px-4 py-3 backdrop-blur">
       <div className="text-xs font-black tracking-[.24em] text-amber-300">GARRIVERSE 2026</div>
       <div className="mt-1 text-lg font-bold">Living Town · 3D prototype</div>
@@ -170,9 +173,9 @@ function World3DPreview(){
     {farmError&&<div role="alert" className="mt-3 rounded-lg bg-red-950 p-3 text-sm">{farmError}</div>}<p className="mt-3 text-center text-xs text-white/50">Server-saved in-game resources. No token or cash payouts.</p></section></div>}
     <div className="absolute bottom-5 left-5 grid grid-cols-3 gap-2 select-none">
       <span />
-      <button aria-label="Move forward" className="h-12 w-12 rounded-xl border border-white/30 bg-black/65 text-xl font-bold" onPointerDown={()=>window.dispatchEvent(new KeyboardEvent("keydown",{key:"w"}))} onPointerUp={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))} onPointerLeave={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))}>↑</button>
+      <button aria-label="Move forward" className="h-14 w-14 touch-none rounded-2xl border-2 border-white/40 bg-black/80 text-2xl font-bold active:bg-amber-400 active:text-black" onContextMenu={e=>e.preventDefault()} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);window.dispatchEvent(new KeyboardEvent("keydown",{key:"w"}))}} onPointerUp={e=>{e.preventDefault();window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))}} onPointerCancel={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))} onLostPointerCapture={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:"w"}))}>↑</button>
       <span />
-      {(["a","s","d"] as const).map(k=><button key={k} aria-label={k==="a"?"Move left":k==="s"?"Move backward":"Move right"} className="h-12 w-12 rounded-xl border border-white/30 bg-black/65 text-xl font-bold" onPointerDown={()=>window.dispatchEvent(new KeyboardEvent("keydown",{key:k}))} onPointerUp={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:k}))} onPointerLeave={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:k}))}>{k==="a"?"←":k==="s"?"↓":"→"}</button>)}
+      {(["a","s","d"] as const).map(k=><button key={k} aria-label={k==="a"?"Move left":k==="s"?"Move backward":"Move right"} className="h-14 w-14 touch-none rounded-2xl border-2 border-white/40 bg-black/80 text-2xl font-bold active:bg-amber-400 active:text-black" onContextMenu={e=>e.preventDefault()} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);window.dispatchEvent(new KeyboardEvent("keydown",{key:k}))}} onPointerUp={e=>{e.preventDefault();window.dispatchEvent(new KeyboardEvent("keyup",{key:k}))}} onPointerCancel={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:k}))} onLostPointerCapture={()=>window.dispatchEvent(new KeyboardEvent("keyup",{key:k}))}>{k==="a"?"←":k==="s"?"↓":"→"}</button>)}
     </div>
     <div className="absolute bottom-5 right-5 flex max-w-[min(55vw,22rem)] flex-col items-end gap-2">
       <div className="rounded-xl border border-white/15 bg-black/75 px-3 py-3 text-xs text-white/90 backdrop-blur">
