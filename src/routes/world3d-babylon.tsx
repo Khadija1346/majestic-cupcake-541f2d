@@ -205,7 +205,7 @@ function BabylonWorld() {
         const tank = B.MeshBuilder.CreateCylinder('elevated water tank', { height: 3.4, diameter: 3.8, tessellation: 20 }, scene)
         tank.position.set(-5, 4.2, 22); tank.material = blue
         const tankLegs = [[-6.3,0,20.7],[-3.7,0,20.7],[-6.3,0,23.3],[-3.7,0,23.3]]
-        for (const [x,y,z] of tankLegs) {
+        for (const [x,,z] of tankLegs) {
           const leg = B.MeshBuilder.CreateCylinder('water tank support', { height: 4.4, diameter: .18 }, scene)
           leg.position.set(x, 2.2, z); leg.material = wood
         }
@@ -382,7 +382,7 @@ function BabylonWorld() {
     {waterOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-sky-200/30 bg-[#102b36]/95 p-4 shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between"><div><div className="text-xs font-black tracking-widest text-sky-300">WATER DISTRICT</div><h2 className="text-lg font-black">Irrigation Station</h2></div><button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setWaterOpen(false)}>Close</button></div>
       <p className="mt-2 text-sm text-white/70">Use the village water network to irrigate your growing cassava. Watering is saved through the farm server.</p>
-      {farm?.plots.filter(p => p.state === 'growing' && !p.wateredAt).map((plot, index) => <button key={plot.id} disabled={!!farmBusy} onClick={() => void runFarmAction('water', plot.id)} className="mt-3 w-full rounded-xl bg-sky-700 px-3 py-3 text-left text-sm font-bold disabled:opacity-40">Water growing plot · {plot.id.slice(0, 8)}</button>)}
+      {farm?.plots.filter(p => p.state === 'growing' && !p.wateredAt).map((plot) => <button key={plot.id} disabled={!!farmBusy} onClick={() => void runFarmAction('water', plot.id)} className="mt-3 w-full rounded-xl bg-sky-700 px-3 py-3 text-left text-sm font-bold disabled:opacity-40">Water growing plot · {plot.id.slice(0, 8)}</button>)}
       {!farm?.plots.some(p => p.state === 'growing' && !p.wateredAt) && <div className="mt-3 rounded-xl bg-white/10 p-3 text-sm text-white/70">No dry growing plots right now. Plant cassava first, then return here to irrigate it.</div>}
       {farmError && <p role="alert" className="mt-3 text-sm text-red-200">{farmError}</p>}
       <button onClick={() => { setWaterOpen(false); setFarmOpen(true) }} className="mt-3 w-full rounded-xl border border-white/20 px-3 py-2 text-sm font-bold">Open full Farm District</button>
