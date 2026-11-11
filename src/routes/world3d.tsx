@@ -129,8 +129,8 @@ function World3DPreview(){
         keys.add(key)
       }
       const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase())
-      const start=(e:PointerEvent)=>{drag=true;lastX=e.clientX;lastY=e.clientY;el.setPointerCapture(e.pointerId)}
-      const move=(e:PointerEvent)=>{if(drag){yaw+=(e.clientX-lastX)*.008;lastX=e.clientX;lastY=e.clientY}}
+      const start=(e:PointerEvent)=>{drag=true;lastX=e.clientX;el.setPointerCapture(e.pointerId)}
+      const move=(e:PointerEvent)=>{if(drag){yaw+=(e.clientX-lastX)*.008;lastX=e.clientX}}
       const end=()=>drag=false
       window.addEventListener('keydown',down);window.addEventListener('keyup',up)
       el.addEventListener('pointerdown',start);el.addEventListener('pointermove',move);el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end)
