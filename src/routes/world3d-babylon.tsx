@@ -229,34 +229,85 @@ function BabylonWorld() {
           canopy.position.set(-31 + i * 4, 2.6, 8); canopy.material = i % 2 ? roof : wallB
         }
 
-        const makePerson = (name: string, color: any, x: number, z: number) => {
+        // Stylized human characters: layered clothing, shaped limbs, face, hair/headwrap and shoes.
+        const skinTones = ['#8c5638', '#a66b48', '#70432f', '#bb805b'].map((c, i) => mat('skin tone ' + i, c))
+        const hairMats = [mat('dark hair', '#211b19'), mat('headwrap indigo', '#315c76'), mat('headwrap cream', '#e7d6b2')]
+        const trimMat = mat('woven clothing trim', '#e8c77c')
+        const shoeMat = mat('leather shoes', '#33251f')
+        const makePerson = (name: string, color: any, x: number, z: number, variant = 0) => {
           const root = new B.TransformNode(name, scene)
-          const torso = B.MeshBuilder.CreateCapsule(name + ' body', { height: 1.25, radius: 0.34 }, scene)
-          torso.parent = root; torso.position.y = 1.12; torso.material = color
-          const head = B.MeshBuilder.CreateSphere(name + ' head', { diameter: 0.55, segments: 10 }, scene)
-          head.parent = root; head.position.y = 2.05; head.material = skin
-          const legs: any[] = []
-          for (let i = 0; i < 2; i++) {
-            const leg = B.MeshBuilder.CreateCylinder(name + ' leg', { height: 0.72, diameter: 0.18 }, scene)
-            leg.parent = root; leg.position.set(i ? 0.18 : -0.18, 0.38, 0); leg.material = dark; legs.push(leg)
+          const create = (mesh: any, y: number, px = 0, pz = 0, material: any = color) => {
+            mesh.parent = root
+            mesh.position.set(px, y, pz)
+            mesh.material = material
+            mesh.isPickable = false
+            return mesh
           }
+          const capsule = (part: string, height: number, radius: number, y: number, px: number, material: any, pz = 0) =>
+            create(B.MeshBuilder.CreateCapsule(name + ' ' + part, { height, radius, tessellation: 12, subdivisions: 4 }, scene), y, px, pz, material)
+          const sphere = (part: string, diameter: number, y: number, px: number, pz: number, material: any, sx = 1, sy = 1, sz = 1) => {
+            const mesh = create(B.MeshBuilder.CreateSphere(name + ' ' + part, { diameter, segments: 16 }, scene), y, px, pz, material)
+            mesh.scaling.set(sx, sy, sz)
+            return mesh
+          }
+          const skinTone = skinTones[variant % skinTones.length]
+          const hair = hairMats[variant % hairMats.length]
+          // Neck and softly shaped torso with a waist sash and chest detail.
+          capsule('neck', 0.34, 0.13, 1.77, 0, skinTone)
+          capsule('tunic', 1.12, 0.37, 1.16, 0, color)
+          const sash = B.MeshBuilder.CreateCylinder(name + ' waist sash', { height: 0.13, diameter: 0.72, tessellation: 20 }, scene)
+          create(sash, 0.86, 0, 0, trimMat)
+          sash.scaling.z = 0.82
+          // Head, ears and readable facial features facing the camera (+Z).
+          sphere('head', 0.62, 2.15, 0, 0, skinTone, 0.88, 1.05, 0.88)
+          sphere('left ear', 0.16, 2.15, -0.28, 0, skinTone)
+          sphere('right ear', 0.16, 2.15, 0.28, 0, skinTone)
+          sphere('left eye', 0.075, 2.2, -0.115, 0.265, hair, 0.85, 1, 0.55)
+          sphere('right eye', 0.075, 2.2, 0.115, 0.265, hair, 0.85, 1, 0.55)
+          sphere('nose', 0.12, 2.08, 0, 0.29, skinTone, 0.72, 0.85, 0.7)
+          const mouth = B.MeshBuilder.CreateSphere(name + ' smile', { diameter: 0.075, segments: 12 }, scene)
+          create(mouth, 1.99, 0, 0.266, hair)
+          mouth.scaling.set(1.5, 0.35, 0.4)
+          // Distinct hair or wrapped headwear, not a featureless sphere.
+          if (variant % 3 === 1) {
+            const wrap = B.MeshBuilder.CreateSphere(name + ' wrapped headwear', { diameter: 0.68, segments: 16 }, scene)
+            create(wrap, 2.39, 0, -0.015, hair)
+            wrap.scaling.set(1.03, 0.46, 0.95)
+            const band = B.MeshBuilder.CreateCylinder(name + ' headwrap band', { height: 0.09, diameter: 0.61, tessellation: 20 }, scene)
+            create(band, 2.28, 0, 0, trimMat)
+          } else {
+            sphere('hair cap', 0.66, 2.42, 0, -0.035, hair, 1.02, 0.52, 0.95)
+            sphere('hair fringe', 0.25, 2.31, 0, 0.22, hair, 1.5, 0.55, 0.55)
+          }
+          const legs: any[] = []
           const arms: any[] = []
           for (let i = 0; i < 2; i++) {
-            const arm = B.MeshBuilder.CreateCylinder(name + ' arm', { height: 0.72, diameter: 0.14 }, scene)
-            arm.parent = root; arm.position.set(i ? 0.43 : -0.43, 1.25, 0); arm.rotation.z = i ? -0.18 : 0.18; arm.material = color; arms.push(arm)
+            const side = i ? 1 : -1
+            const leg = capsule('leg ' + i, 0.82, 0.15, 0.42, side * 0.19, dark)
+            leg.position.z = 0
+            legs.push(leg)
+            const shoe = B.MeshBuilder.CreateBox(name + ' shoe ' + i, { width: 0.25, height: 0.14, depth: 0.42 }, scene)
+            create(shoe, 0.08, side * 0.19, 0.1, shoeMat)
+            const sleeve = capsule('arm ' + i, 0.78, 0.13, 1.25, side * 0.45, color)
+            sleeve.rotation.z = side * -0.12
+            arms.push(sleeve)
+            capsule('hand ' + i, 0.24, 0.105, 0.79, side * 0.47, skinTone, 0.015)
           }
+          // A small shoulder cloth panel adds silhouette and material contrast.
+          const shoulder = B.MeshBuilder.CreateBox(name + ' shoulder detail', { width: 0.52, height: 0.12, depth: 0.08 }, scene)
+          create(shoulder, 1.57, 0, 0.29, trimMat)
           root.position.set(x, 0, z)
           return { root, legs, arms, home: new B.Vector3(x, 0, z), phase: Math.random() * 6, speed: 0.55 + Math.random() * 0.35 }
         }
         const playerMat = mat('player outfit', '#e66b38')
         player = makePerson('player citizen', playerMat, 0, 3)
         const npcData = [
-          makePerson('farmer', cloths[1], 18, 9),
-          makePerson('market trader', cloths[2], -28, 4),
-          makePerson('processor', cloths[3], 31, -8),
-          makePerson('resident', cloths[0], -8, -2),
-          makePerson('water carrier', cloths[4], 2, 16),
-          makePerson('village guard', dark, -12, 21),
+          makePerson('farmer', cloths[1], 18, 9, 1),
+          makePerson('market trader', cloths[2], -28, 4, 2),
+          makePerson('processor', cloths[3], 31, -8, 3),
+          makePerson('resident', cloths[0], -8, -2, 0),
+          makePerson('water carrier', cloths[4], 2, 16, 1),
+          makePerson('village guard', dark, -12, 21, 2),
         ]
         const cameraTarget = new B.Vector3(0, 1.1, 3)
         camera = new B.ArcRotateCamera('third person camera', -Math.PI / 2, 1.12, 13, cameraTarget, scene)
