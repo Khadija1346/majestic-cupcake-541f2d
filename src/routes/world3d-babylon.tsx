@@ -114,7 +114,6 @@ function BabylonWorld() {
         const roof = mat('terracotta roof', '#8c4630')
         const blue = mat('water', '#3b91c5', 0.35)
         const dark = mat('dark fabric', '#29313a')
-        const skin = mat('warm skin', '#8c5638')
         const cloths = ['#c65b32', '#286c67', '#d6a53c', '#5865a5', '#8b5a88'].map((c, i) => mat('cloth ' + i, c))
 
         const ground = B.MeshBuilder.CreateGround('village ground', { width: 110, height: 110, subdivisions: 2 }, scene)
