@@ -15,6 +15,9 @@ function BabylonWorld() {
   const [nearby, setNearby] = useState('')
   const [farm, setFarm] = useState<Awaited<ReturnType<typeof getFarm>> | null>(null)
   const [farmOpen, setFarmOpen] = useState(false)
+  const [waterOpen, setWaterOpen] = useState(false)
+  const [marketOpen, setMarketOpen] = useState(false)
+  const [officeOpen, setOfficeOpen] = useState(false)
   const [farmLoading, setFarmLoading] = useState(true)
   const [farmBusy, setFarmBusy] = useState<string | null>(null)
   const [farmError, setFarmError] = useState('')
@@ -132,6 +135,8 @@ function BabylonWorld() {
         road('main village road', 0, 0, 9, 95)
         road('cross village road', 0, 0, 85, 7)
         road('farm lane', 22, 20, 8, 37)
+        road('water district lane', -9, 19, 7, 31)
+        road('market lane', -25, 7, 28, 6)
 
         const house = (x: number, z: number, wall: any, scale = 1) => {
           box('village home', x, 0, z, 8 * scale, 3.4 * scale, 7 * scale, wall)
@@ -151,6 +156,10 @@ function BabylonWorld() {
         house(-19, 14, wallB, 0.92)
         house(18, 15, wallA, 1)
         house(-34, -2, wallA, 0.85)
+        box('moderator office', -34, 0, -27, 9, 4, 7, wallB)
+        const officeRoof = B.MeshBuilder.CreateBox('moderator office roof', { width: 10, height: .65, depth: 8 }, scene)
+        officeRoof.position.set(-34, 4.2, -27); officeRoof.material = roof
+        box('office signboard', -34, 3.2, -23.2, 5.2, .8, .12, wood).checkCollisions = false
 
         const palm = (x: number, z: number) => {
           const trunk = B.MeshBuilder.CreateCylinder('palm trunk', { height: 5.4, diameterTop: 0.32, diameterBottom: 0.58, tessellation: 8 }, scene)
@@ -187,7 +196,22 @@ function BabylonWorld() {
           }
         }
 
-        // Well, processing shed and market stalls.
+        // Water District: reservoir, irrigation channels, pump house and elevated tank.
+        const reservoir = B.MeshBuilder.CreateGround('water reservoir', { width: 15, height: 10 }, scene)
+        reservoir.position.set(-11, 0.035, 21); reservoir.material = blue
+        box('water pump house', -19, 0, 20, 5, 2.8, 4, wallB)
+        const tank = B.MeshBuilder.CreateCylinder('elevated water tank', { height: 3.4, diameter: 3.8, tessellation: 20 }, scene)
+        tank.position.set(-5, 4.2, 22); tank.material = blue
+        const tankLegs = [[-6.3,0,20.7],[-3.7,0,20.7],[-6.3,0,23.3],[-3.7,0,23.3]]
+        for (const [x,y,z] of tankLegs) {
+          const leg = B.MeshBuilder.CreateCylinder('water tank support', { height: 4.4, diameter: .18 }, scene)
+          leg.position.set(x, 2.2, z); leg.material = wood
+        }
+        for (let i=0;i<3;i++) {
+          const channel = B.MeshBuilder.CreateGround('irrigation channel', { width: 1.1, height: 18 }, scene)
+          channel.position.set(-3 + i*2, .055, 20); channel.material = blue
+        }
+        // Processing shed and market stalls.
         const well = B.MeshBuilder.CreateCylinder('village well', { height: 0.75, diameter: 2.8, tessellation: 20 }, scene)
         well.position.set(-2, 0.38, 13)
         well.material = wood
@@ -295,7 +319,9 @@ function BabylonWorld() {
           const dFarm = B.Vector3.Distance(player.position, new B.Vector3(23, 0, 17))
           const dMarket = B.Vector3.Distance(player.position, new B.Vector3(-25, 0, 8))
           const dMill = B.Vector3.Distance(player.position, new B.Vector3(33, 0, 0))
-          const next = dFarm < 7 ? 'Farm District' : dMarket < 7 ? 'Market Square' : dMill < 8 ? 'Processing Shed' : ''
+          const dWater = B.Vector3.Distance(player.position, new B.Vector3(-11, 0, 21))
+          const dOffice = B.Vector3.Distance(player.position, new B.Vector3(-34, 0, -27))
+          const next = dFarm < 7 ? 'Farm District' : dWater < 8 ? 'Water District' : dMarket < 8 ? 'Market Square' : dMill < 9 ? 'Processing District' : dOffice < 8 ? 'Moderator Office' : ''
           setNearby((old: string) => old === next ? old : next)
         })
 
@@ -336,7 +362,10 @@ function BabylonWorld() {
       <div className="mt-1 text-xs text-white/80">{status}</div>
       {nearby && <div className="mt-2 inline-block rounded-full bg-amber-300 px-3 py-1 text-xs font-black text-black">Nearby: {nearby} · tap INTERACT</div>}
     </header>
-    <a href="/world3d" className="absolute right-4 top-36 rounded-xl bg-black/65 px-4 py-3 text-sm font-bold">← Old preview</a>
+    <div className="absolute right-3 top-28 flex gap-2">
+      <a href="/bank" className="rounded-xl border border-white/20 bg-[#14251f]/90 px-3 py-2 text-xs font-black shadow-lg">WALLET</a>
+      <a href="/moderator" className="rounded-xl border border-white/20 bg-[#14251f]/90 px-3 py-2 text-xs font-black shadow-lg">MOD OFFICE</a>
+    </div>
     <div className="absolute bottom-5 left-4 flex flex-col items-center gap-2 select-none">
       <button aria-label="Move forward" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('w', true) }} onPointerUp={() => press('w', false)} onPointerCancel={() => press('w', false)} onPointerLeave={() => press('w', false)}>↑</button>
       <div className="flex gap-2">
@@ -345,7 +374,28 @@ function BabylonWorld() {
         <button aria-label="Move right" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('d', true) }} onPointerUp={() => press('d', false)} onPointerCancel={() => press('d', false)} onPointerLeave={() => press('d', false)}>→</button>
       </div>
     </div>
-    <button className="absolute bottom-10 right-5 rounded-2xl bg-amber-400 px-6 py-4 font-black text-black shadow-xl active:scale-95" onClick={() => { if (nearby === 'Farm District' || nearby === 'Processing Shed') setFarmOpen(true); else setStatus(nearby ? nearby + ' services are not connected yet.' : 'Walk closer to the cassava farm, market or processing shed first.') }}>INTERACT</button>
+    <button className="absolute bottom-10 right-5 rounded-2xl bg-amber-400 px-6 py-4 font-black text-black shadow-xl active:scale-95" onClick={() => { if (nearby === 'Farm District' || nearby === 'Processing District') setFarmOpen(true); else if (nearby === 'Water District') setWaterOpen(true); else if (nearby === 'Market Square') setMarketOpen(true); else if (nearby === 'Moderator Office') setOfficeOpen(true); else setStatus('Walk closer to a marked district first.') }}>INTERACT</button>
+    {waterOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-sky-200/30 bg-[#102b36]/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between"><div><div className="text-xs font-black tracking-widest text-sky-300">WATER DISTRICT</div><h2 className="text-lg font-black">Irrigation Station</h2></div><button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setWaterOpen(false)}>Close</button></div>
+      <p className="mt-2 text-sm text-white/70">Use the village water network to irrigate your growing cassava. Watering is saved through the farm server.</p>
+      {farm?.plots.filter(p => p.state === 'growing' && !p.wateredAt).map((plot, index) => <button key={plot.id} disabled={!!farmBusy} onClick={() => void runFarmAction('water', plot.id)} className="mt-3 w-full rounded-xl bg-sky-700 px-3 py-3 text-left text-sm font-bold disabled:opacity-40">Water growing plot · {plot.id.slice(0, 8)}</button>)}
+      {!farm?.plots.some(p => p.state === 'growing' && !p.wateredAt) && <div className="mt-3 rounded-xl bg-white/10 p-3 text-sm text-white/70">No dry growing plots right now. Plant cassava first, then return here to irrigate it.</div>}
+      {farmError && <p role="alert" className="mt-3 text-sm text-red-200">{farmError}</p>}
+      <button onClick={() => { setWaterOpen(false); setFarmOpen(true) }} className="mt-3 w-full rounded-xl border border-white/20 px-3 py-2 text-sm font-bold">Open full Farm District</button>
+    </section>}
+    {marketOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-amber-200/30 bg-[#2b2017]/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between"><div><div className="text-xs font-black tracking-widest text-amber-300">MARKET SQUARE</div><h2 className="text-lg font-black">Garri Market</h2></div><button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setMarketOpen(false)}>Close</button></div>
+      <p className="mt-2 text-sm text-white/70">Your current server-saved stock. Trading and token settlement are not enabled until the project team approves a real market contract and pricing rules.</p>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">{[['Seeds',farm?.seeds ?? '—'],['Cassava',farm?.cassava ?? '—'],['Garri',farm?.garri ?? '—']].map(([label,value]) => <div key={label} className="rounded-xl bg-white/10 p-3"><b className="block text-xl">{value}</b>{label}</div>)}</div>
+      <a href="/market" className="mt-3 block rounded-xl bg-amber-400 px-3 py-3 text-center text-sm font-black text-black">Open Market page</a>
+      <p className="mt-2 text-[10px] text-white/45">No fake listings, simulated sales, cash-out or $GARRI payouts are shown here.</p>
+    </section>}
+    {officeOpen && <section className="absolute bottom-28 right-3 z-20 w-[min(92vw,390px)] rounded-2xl border border-violet-200/30 bg-[#211a32]/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between"><div><div className="text-xs font-black tracking-widest text-violet-300">GARRIVERSE OPERATIONS</div><h2 className="text-lg font-black">Moderator Office</h2></div><button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setOfficeOpen(false)}>Close</button></div>
+      <p className="mt-2 text-sm text-white/70">Staff access is protected by Netlify Identity and server-side role checks. A Citizen account alone does not grant moderator privileges.</p>
+      <a href="/moderator" className="mt-3 block rounded-xl bg-violet-500 px-3 py-3 text-center text-sm font-black">Enter Moderator Office</a>
+      <a href="https://t.me/Defi_deeja2" target="_blank" rel="noreferrer" className="mt-2 block rounded-xl border border-white/20 px-3 py-3 text-center text-sm font-bold">Contact Game Admin</a>
+    </section>}
     {farmOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-amber-200/30 bg-[#14251f]/95 p-4 shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between gap-3">
         <div><div className="text-xs font-black tracking-widest text-amber-300">SERVER-SAVED FARM</div><h2 className="text-lg font-black">Cassava District</h2></div>
