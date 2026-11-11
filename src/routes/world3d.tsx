@@ -151,6 +151,9 @@ function World3DPreview(){
         const eye:[number,number,number]=[px-Math.sin(yaw)*8,5.5,pz+Math.cos(yaw)*8]
         const target:[number,number,number]=[px,1.1,pz]
         gl.uniformMatrix4fv(mvp,false,multiply(perspective(Math.PI/3,el.width/Math.max(1,el.height),.1,120),view(eye,target)))
+        // Restore the static scene buffers before drawing the world each frame.
+        gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.vertexAttribPointer(pos,3,gl.FLOAT,false,0,0)
+        gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.vertexAttribPointer(col,3,gl.FLOAT,false,0,0)
         gl.drawArrays(gl.TRIANGLES,0,vertices.length/3)
 
         // Procedural village residents: walk between work points, swing arms/legs, and bob while moving.
