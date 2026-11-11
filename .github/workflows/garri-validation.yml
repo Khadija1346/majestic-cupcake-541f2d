@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - backup/pre-upgrade-2026-11-10
+      - feature/garriverse-professional-upgrade-2026-11-11
   pull_request:
     branches:
       - main

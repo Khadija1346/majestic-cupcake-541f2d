@@ -15,6 +15,9 @@ function BabylonWorld() {
   const [nearby, setNearby] = useState('')
   const [farm, setFarm] = useState<Awaited<ReturnType<typeof getFarm>> | null>(null)
   const [farmOpen, setFarmOpen] = useState(false)
+  const [waterOpen, setWaterOpen] = useState(false)
+  const [marketOpen, setMarketOpen] = useState(false)
+  const [officeOpen, setOfficeOpen] = useState(false)
   const [farmLoading, setFarmLoading] = useState(true)
   const [farmBusy, setFarmBusy] = useState<string | null>(null)
   const [farmError, setFarmError] = useState('')
@@ -77,6 +80,8 @@ function BabylonWorld() {
         const B = window.BABYLON
         if (!B) throw new Error('Babylon.js did not initialize.')
         engine = new B.Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true, adaptToDeviceRatio: true }, true)
+        // Cap effective render resolution on dense mobile screens to keep frame times stable.
+        engine.setHardwareScalingLevel(Math.max(1, window.devicePixelRatio / 1.5))
         scene = new B.Scene(engine)
         scene.clearColor = new B.Color4(0.48, 0.72, 0.88, 1)
         scene.collisionsEnabled = true
@@ -132,6 +137,8 @@ function BabylonWorld() {
         road('main village road', 0, 0, 9, 95)
         road('cross village road', 0, 0, 85, 7)
         road('farm lane', 22, 20, 8, 37)
+        road('water district lane', -9, 19, 7, 31)
+        road('market lane', -25, 7, 28, 6)
 
         const house = (x: number, z: number, wall: any, scale = 1) => {
           box('village home', x, 0, z, 8 * scale, 3.4 * scale, 7 * scale, wall)
@@ -151,6 +158,10 @@ function BabylonWorld() {
         house(-19, 14, wallB, 0.92)
         house(18, 15, wallA, 1)
         house(-34, -2, wallA, 0.85)
+        box('moderator office', -34, 0, -27, 9, 4, 7, wallB)
+        const officeRoof = B.MeshBuilder.CreateBox('moderator office roof', { width: 10, height: .65, depth: 8 }, scene)
+        officeRoof.position.set(-34, 4.2, -27); officeRoof.material = roof
+        box('office signboard', -34, 3.2, -23.2, 5.2, .8, .12, wood).checkCollisions = false
 
         const palm = (x: number, z: number) => {
           const trunk = B.MeshBuilder.CreateCylinder('palm trunk', { height: 5.4, diameterTop: 0.32, diameterBottom: 0.58, tessellation: 8 }, scene)
@@ -187,7 +198,22 @@ function BabylonWorld() {
           }
         }
 
-        // Well, processing shed and market stalls.
+        // Water District: reservoir, irrigation channels, pump house and elevated tank.
+        const reservoir = B.MeshBuilder.CreateGround('water reservoir', { width: 15, height: 10 }, scene)
+        reservoir.position.set(-11, 0.035, 21); reservoir.material = blue
+        box('water pump house', -19, 0, 20, 5, 2.8, 4, wallB)
+        const tank = B.MeshBuilder.CreateCylinder('elevated water tank', { height: 3.4, diameter: 3.8, tessellation: 20 }, scene)
+        tank.position.set(-5, 4.2, 22); tank.material = blue
+        const tankLegs = [[-6.3,0,20.7],[-3.7,0,20.7],[-6.3,0,23.3],[-3.7,0,23.3]]
+        for (const [x,,z] of tankLegs) {
+          const leg = B.MeshBuilder.CreateCylinder('water tank support', { height: 4.4, diameter: .18 }, scene)
+          leg.position.set(x, 2.2, z); leg.material = wood
+        }
+        for (let i=0;i<3;i++) {
+          const channel = B.MeshBuilder.CreateGround('irrigation channel', { width: 1.1, height: 18 }, scene)
+          channel.position.set(-3 + i*2, .055, 20); channel.material = blue
+        }
+        // Processing shed and market stalls.
         const well = B.MeshBuilder.CreateCylinder('village well', { height: 0.75, diameter: 2.8, tessellation: 20 }, scene)
         well.position.set(-2, 0.38, 13)
         well.material = wood
@@ -203,34 +229,85 @@ function BabylonWorld() {
           canopy.position.set(-31 + i * 4, 2.6, 8); canopy.material = i % 2 ? roof : wallB
         }
 
-        const makePerson = (name: string, color: any, x: number, z: number) => {
+        // Stylized human characters: layered clothing, shaped limbs, face, hair/headwrap and shoes.
+        const skinTones = ['#8c5638', '#a66b48', '#70432f', '#bb805b'].map((c, i) => mat('skin tone ' + i, c))
+        const hairMats = [mat('dark hair', '#211b19'), mat('headwrap indigo', '#315c76'), mat('headwrap cream', '#e7d6b2')]
+        const trimMat = mat('woven clothing trim', '#e8c77c')
+        const shoeMat = mat('leather shoes', '#33251f')
+        const makePerson = (name: string, color: any, x: number, z: number, variant = 0) => {
           const root = new B.TransformNode(name, scene)
-          const torso = B.MeshBuilder.CreateCapsule(name + ' body', { height: 1.25, radius: 0.34 }, scene)
-          torso.parent = root; torso.position.y = 1.12; torso.material = color
-          const head = B.MeshBuilder.CreateSphere(name + ' head', { diameter: 0.55, segments: 10 }, scene)
-          head.parent = root; head.position.y = 2.05; head.material = skin
-          const legs: any[] = []
-          for (let i = 0; i < 2; i++) {
-            const leg = B.MeshBuilder.CreateCylinder(name + ' leg', { height: 0.72, diameter: 0.18 }, scene)
-            leg.parent = root; leg.position.set(i ? 0.18 : -0.18, 0.38, 0); leg.material = dark; legs.push(leg)
+          const create = (mesh: any, y: number, px = 0, pz = 0, material: any = color) => {
+            mesh.parent = root
+            mesh.position.set(px, y, pz)
+            mesh.material = material
+            mesh.isPickable = false
+            return mesh
           }
+          const capsule = (part: string, height: number, radius: number, y: number, px: number, material: any, pz = 0) =>
+            create(B.MeshBuilder.CreateCapsule(name + ' ' + part, { height, radius, tessellation: 12, subdivisions: 4 }, scene), y, px, pz, material)
+          const sphere = (part: string, diameter: number, y: number, px: number, pz: number, material: any, sx = 1, sy = 1, sz = 1) => {
+            const mesh = create(B.MeshBuilder.CreateSphere(name + ' ' + part, { diameter, segments: 16 }, scene), y, px, pz, material)
+            mesh.scaling.set(sx, sy, sz)
+            return mesh
+          }
+          const skinTone = skinTones[variant % skinTones.length]
+          const hair = hairMats[variant % hairMats.length]
+          // Neck and softly shaped torso with a waist sash and chest detail.
+          capsule('neck', 0.34, 0.13, 1.77, 0, skinTone)
+          capsule('tunic', 1.12, 0.37, 1.16, 0, color)
+          const sash = B.MeshBuilder.CreateCylinder(name + ' waist sash', { height: 0.13, diameter: 0.72, tessellation: 20 }, scene)
+          create(sash, 0.86, 0, 0, trimMat)
+          sash.scaling.z = 0.82
+          // Head, ears and readable facial features facing the camera (+Z).
+          sphere('head', 0.62, 2.15, 0, 0, skinTone, 0.88, 1.05, 0.88)
+          sphere('left ear', 0.16, 2.15, -0.28, 0, skinTone)
+          sphere('right ear', 0.16, 2.15, 0.28, 0, skinTone)
+          sphere('left eye', 0.075, 2.2, -0.115, 0.265, hair, 0.85, 1, 0.55)
+          sphere('right eye', 0.075, 2.2, 0.115, 0.265, hair, 0.85, 1, 0.55)
+          sphere('nose', 0.12, 2.08, 0, 0.29, skinTone, 0.72, 0.85, 0.7)
+          const mouth = B.MeshBuilder.CreateSphere(name + ' smile', { diameter: 0.075, segments: 12 }, scene)
+          create(mouth, 1.99, 0, 0.266, hair)
+          mouth.scaling.set(1.5, 0.35, 0.4)
+          // Distinct hair or wrapped headwear, not a featureless sphere.
+          if (variant % 3 === 1) {
+            const wrap = B.MeshBuilder.CreateSphere(name + ' wrapped headwear', { diameter: 0.68, segments: 16 }, scene)
+            create(wrap, 2.39, 0, -0.015, hair)
+            wrap.scaling.set(1.03, 0.46, 0.95)
+            const band = B.MeshBuilder.CreateCylinder(name + ' headwrap band', { height: 0.09, diameter: 0.61, tessellation: 20 }, scene)
+            create(band, 2.28, 0, 0, trimMat)
+          } else {
+            sphere('hair cap', 0.66, 2.42, 0, -0.035, hair, 1.02, 0.52, 0.95)
+            sphere('hair fringe', 0.25, 2.31, 0, 0.22, hair, 1.5, 0.55, 0.55)
+          }
+          const legs: any[] = []
           const arms: any[] = []
           for (let i = 0; i < 2; i++) {
-            const arm = B.MeshBuilder.CreateCylinder(name + ' arm', { height: 0.72, diameter: 0.14 }, scene)
-            arm.parent = root; arm.position.set(i ? 0.43 : -0.43, 1.25, 0); arm.rotation.z = i ? -0.18 : 0.18; arm.material = color; arms.push(arm)
+            const side = i ? 1 : -1
+            const leg = capsule('leg ' + i, 0.82, 0.15, 0.42, side * 0.19, dark)
+            leg.position.z = 0
+            legs.push(leg)
+            const shoe = B.MeshBuilder.CreateBox(name + ' shoe ' + i, { width: 0.25, height: 0.14, depth: 0.42 }, scene)
+            create(shoe, 0.08, side * 0.19, 0.1, shoeMat)
+            const sleeve = capsule('arm ' + i, 0.78, 0.13, 1.25, side * 0.45, color)
+            sleeve.rotation.z = side * -0.12
+            arms.push(sleeve)
+            capsule('hand ' + i, 0.24, 0.105, 0.79, side * 0.47, skinTone, 0.015)
           }
+          // A small shoulder cloth panel adds silhouette and material contrast.
+          const shoulder = B.MeshBuilder.CreateBox(name + ' shoulder detail', { width: 0.52, height: 0.12, depth: 0.08 }, scene)
+          create(shoulder, 1.57, 0, 0.29, trimMat)
           root.position.set(x, 0, z)
           return { root, legs, arms, home: new B.Vector3(x, 0, z), phase: Math.random() * 6, speed: 0.55 + Math.random() * 0.35 }
         }
         const playerMat = mat('player outfit', '#e66b38')
         player = makePerson('player citizen', playerMat, 0, 3)
         const npcData = [
-          makePerson('farmer', cloths[1], 18, 9),
-          makePerson('market trader', cloths[2], -28, 4),
-          makePerson('processor', cloths[3], 31, -8),
-          makePerson('resident', cloths[0], -8, -2),
-          makePerson('water carrier', cloths[4], 2, 16),
-          makePerson('village guard', dark, -12, 21),
+          makePerson('farmer', cloths[1], 18, 9, 1),
+          makePerson('market trader', cloths[2], -28, 4, 2),
+          makePerson('processor', cloths[3], 31, -8, 3),
+          makePerson('resident', cloths[0], -8, -2, 0),
+          makePerson('water carrier', cloths[4], 2, 16, 1),
+          makePerson('village guard', dark, -12, 21, 2),
         ]
         const cameraTarget = new B.Vector3(0, 1.1, 3)
         camera = new B.ArcRotateCamera('third person camera', -Math.PI / 2, 1.12, 13, cameraTarget, scene)
@@ -245,6 +322,7 @@ function BabylonWorld() {
 
         const onDown = (e: KeyboardEvent) => keys.current.add(e.key.toLowerCase())
         const onUp = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase())
+        const onBlur = () => keys.current.clear()
         const pointerDown = (e: PointerEvent) => { drag = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId) }
         const pointerMove = (e: PointerEvent) => {
           if (!drag) return
@@ -255,6 +333,7 @@ function BabylonWorld() {
         const pointerUp = () => { drag = false }
         window.addEventListener('keydown', onDown)
         window.addEventListener('keyup', onUp)
+        window.addEventListener('blur', onBlur)
         canvas.addEventListener('pointerdown', pointerDown)
         canvas.addEventListener('pointermove', pointerMove)
         canvas.addEventListener('pointerup', pointerUp)
@@ -272,16 +351,16 @@ function BabylonWorld() {
           const angle = camera.alpha
           const vx = (-Math.sin(angle) * forward + Math.cos(angle) * side) * 5.2 * dt
           const vz = (-Math.cos(angle) * forward - Math.sin(angle) * side) * 5.2 * dt
-          player.position.x = Math.max(-43, Math.min(43, player.position.x + vx))
-          player.position.z = Math.max(-43, Math.min(43, player.position.z + vz))
+          player.root.position.x = Math.max(-43, Math.min(43, player.root.position.x + vx))
+          player.root.position.z = Math.max(-43, Math.min(43, player.root.position.z + vz))
           if (Math.abs(vx) + Math.abs(vz) > 0.001) {
             playerYaw = Math.atan2(vx, vz)
-            player.rotation.y = playerYaw
+            player.root.rotation.y = playerYaw
             const swing = Math.sin(now * 0.012) * 0.48
-            player.getChildMeshes().filter((m: any) => m.name.includes('leg')).forEach((m: any, i: number) => { m.rotation.x = i ? swing : -swing })
-            player.getChildMeshes().filter((m: any) => m.name.includes('arm')).forEach((m: any, i: number) => { m.rotation.x = i ? -swing * 0.7 : swing * 0.7 })
+            player.root.getChildMeshes().filter((m: any) => m.name.includes('leg')).forEach((m: any, i: number) => { m.rotation.x = i ? swing : -swing })
+            player.root.getChildMeshes().filter((m: any) => m.name.includes('arm')).forEach((m: any, i: number) => { m.rotation.x = i ? -swing * 0.7 : swing * 0.7 })
           }
-          camera.target.copyFrom(player.position.add(new B.Vector3(0, 1.15, 0)))
+          camera.target.copyFrom(player.root.position.add(new B.Vector3(0, 1.15, 0)))
           npcData.forEach((npc, i) => {
             const phase = now * 0.00022 * npc.speed + npc.phase
             const x = npc.home.x + Math.sin(phase) * (i % 2 ? 3.5 : 5)
@@ -292,10 +371,12 @@ function BabylonWorld() {
             npc.legs.forEach((m: any, j: number) => { m.rotation.x = j ? swing : -swing })
             npc.arms.forEach((m: any, j: number) => { m.rotation.x = j ? -swing : swing })
           })
-          const dFarm = B.Vector3.Distance(player.position, new B.Vector3(23, 0, 17))
-          const dMarket = B.Vector3.Distance(player.position, new B.Vector3(-25, 0, 8))
-          const dMill = B.Vector3.Distance(player.position, new B.Vector3(33, 0, 0))
-          const next = dFarm < 7 ? 'Farm District' : dMarket < 7 ? 'Market Square' : dMill < 8 ? 'Processing Shed' : ''
+          const dFarm = B.Vector3.Distance(player.root.position, new B.Vector3(23, 0, 17))
+          const dMarket = B.Vector3.Distance(player.root.position, new B.Vector3(-25, 0, 8))
+          const dMill = B.Vector3.Distance(player.root.position, new B.Vector3(33, 0, 0))
+          const dWater = B.Vector3.Distance(player.root.position, new B.Vector3(-11, 0, 21))
+          const dOffice = B.Vector3.Distance(player.root.position, new B.Vector3(-34, 0, -27))
+          const next = dFarm < 7 ? 'Farm District' : dWater < 8 ? 'Water District' : dMarket < 8 ? 'Market Square' : dMill < 9 ? 'Processing District' : dOffice < 8 ? 'Moderator Office' : ''
           setNearby((old: string) => old === next ? old : next)
         })
 
@@ -336,7 +417,10 @@ function BabylonWorld() {
       <div className="mt-1 text-xs text-white/80">{status}</div>
       {nearby && <div className="mt-2 inline-block rounded-full bg-amber-300 px-3 py-1 text-xs font-black text-black">Nearby: {nearby} · tap INTERACT</div>}
     </header>
-    <a href="/world3d" className="absolute right-4 top-36 rounded-xl bg-black/65 px-4 py-3 text-sm font-bold">← Old preview</a>
+    <div className="absolute right-3 top-28 flex gap-2">
+      <a href="/bank" className="rounded-xl border border-white/20 bg-[#14251f]/90 px-3 py-2 text-xs font-black shadow-lg">WALLET</a>
+      <a href="/moderator" className="rounded-xl border border-white/20 bg-[#14251f]/90 px-3 py-2 text-xs font-black shadow-lg">MOD OFFICE</a>
+    </div>
     <div className="absolute bottom-5 left-4 flex flex-col items-center gap-2 select-none">
       <button aria-label="Move forward" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('w', true) }} onPointerUp={() => press('w', false)} onPointerCancel={() => press('w', false)} onPointerLeave={() => press('w', false)}>↑</button>
       <div className="flex gap-2">
@@ -345,7 +429,28 @@ function BabylonWorld() {
         <button aria-label="Move right" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('d', true) }} onPointerUp={() => press('d', false)} onPointerCancel={() => press('d', false)} onPointerLeave={() => press('d', false)}>→</button>
       </div>
     </div>
-    <button className="absolute bottom-10 right-5 rounded-2xl bg-amber-400 px-6 py-4 font-black text-black shadow-xl active:scale-95" onClick={() => { if (nearby === 'Farm District' || nearby === 'Processing Shed') setFarmOpen(true); else setStatus(nearby ? nearby + ' services are not connected yet.' : 'Walk closer to the cassava farm, market or processing shed first.') }}>INTERACT</button>
+    <button className="absolute bottom-10 right-5 rounded-2xl bg-amber-400 px-6 py-4 font-black text-black shadow-xl active:scale-95" onClick={() => { if (nearby === 'Farm District' || nearby === 'Processing District') setFarmOpen(true); else if (nearby === 'Water District') setWaterOpen(true); else if (nearby === 'Market Square') setMarketOpen(true); else if (nearby === 'Moderator Office') setOfficeOpen(true); else setStatus('Walk closer to a marked district first.') }}>INTERACT</button>
+    {waterOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-sky-200/30 bg-[#102b36]/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between"><div><div className="text-xs font-black tracking-widest text-sky-300">WATER DISTRICT</div><h2 className="text-lg font-black">Irrigation Station</h2></div><button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setWaterOpen(false)}>Close</button></div>
+      <p className="mt-2 text-sm text-white/70">Use the village water network to irrigate your growing cassava. Watering is saved through the farm server.</p>
+      {farm?.plots.filter(p => p.state === 'growing' && !p.wateredAt).map((plot) => <button key={plot.id} disabled={!!farmBusy} onClick={() => void runFarmAction('water', plot.id)} className="mt-3 w-full rounded-xl bg-sky-700 px-3 py-3 text-left text-sm font-bold disabled:opacity-40">Water growing plot · {plot.id.slice(0, 8)}</button>)}
+      {!farm?.plots.some(p => p.state === 'growing' && !p.wateredAt) && <div className="mt-3 rounded-xl bg-white/10 p-3 text-sm text-white/70">No dry growing plots right now. Plant cassava first, then return here to irrigate it.</div>}
+      {farmError && <p role="alert" className="mt-3 text-sm text-red-200">{farmError}</p>}
+      <button onClick={() => { setWaterOpen(false); setFarmOpen(true) }} className="mt-3 w-full rounded-xl border border-white/20 px-3 py-2 text-sm font-bold">Open full Farm District</button>
+    </section>}
+    {marketOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-amber-200/30 bg-[#2b2017]/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between"><div><div className="text-xs font-black tracking-widest text-amber-300">MARKET SQUARE</div><h2 className="text-lg font-black">Garri Market</h2></div><button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setMarketOpen(false)}>Close</button></div>
+      <p className="mt-2 text-sm text-white/70">Your current server-saved stock. Trading and token settlement are not enabled until the project team approves a real market contract and pricing rules.</p>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">{[['Seeds',farm?.seeds ?? '—'],['Cassava',farm?.cassava ?? '—'],['Garri',farm?.garri ?? '—']].map(([label,value]) => <div key={label} className="rounded-xl bg-white/10 p-3"><b className="block text-xl">{value}</b>{label}</div>)}</div>
+      <a href="/market" className="mt-3 block rounded-xl bg-amber-400 px-3 py-3 text-center text-sm font-black text-black">Open Market page</a>
+      <p className="mt-2 text-[10px] text-white/45">No fake listings, simulated sales, cash-out or $GARRI payouts are shown here.</p>
+    </section>}
+    {officeOpen && <section className="absolute bottom-28 right-3 z-20 w-[min(92vw,390px)] rounded-2xl border border-violet-200/30 bg-[#211a32]/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between"><div><div className="text-xs font-black tracking-widest text-violet-300">GARRIVERSE OPERATIONS</div><h2 className="text-lg font-black">Moderator Office</h2></div><button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setOfficeOpen(false)}>Close</button></div>
+      <p className="mt-2 text-sm text-white/70">Staff access is protected by Netlify Identity and server-side role checks. A Citizen account alone does not grant moderator privileges.</p>
+      <a href="/moderator" className="mt-3 block rounded-xl bg-violet-500 px-3 py-3 text-center text-sm font-black">Enter Moderator Office</a>
+      <a href="https://t.me/Defi_deeja2" target="_blank" rel="noreferrer" className="mt-2 block rounded-xl border border-white/20 px-3 py-3 text-center text-sm font-bold">Contact Game Admin</a>
+    </section>}
     {farmOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-amber-200/30 bg-[#14251f]/95 p-4 shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between gap-3">
         <div><div className="text-xs font-black tracking-widest text-amber-300">SERVER-SAVED FARM</div><h2 className="text-lg font-black">Cassava District</h2></div>

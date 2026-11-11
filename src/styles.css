@@ -101,3 +101,17 @@ body {
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
+
+
+/* Consistent accessible controls for secure staff forms. */
+.input {
+  border: 1px solid rgba(253, 244, 225, 0.18);
+  border-radius: 0.8rem;
+  background: rgba(11, 10, 31, 0.58);
+  color: var(--color-cream);
+  padding: 0.75rem 0.9rem;
+  outline: none;
+}
+.input::placeholder { color: rgba(253, 244, 225, 0.38); }
+.input:focus { border-color: var(--color-gold); box-shadow: 0 0 0 3px rgba(242, 182, 50, 0.14); }
+.input:disabled { opacity: 0.5; cursor: not-allowed; }
