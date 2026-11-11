@@ -80,6 +80,8 @@ function BabylonWorld() {
         const B = window.BABYLON
         if (!B) throw new Error('Babylon.js did not initialize.')
         engine = new B.Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true, adaptToDeviceRatio: true }, true)
+        // Cap effective render resolution on dense mobile screens to keep frame times stable.
+        engine.setHardwareScalingLevel(Math.max(1, window.devicePixelRatio / 1.5))
         scene = new B.Scene(engine)
         scene.clearColor = new B.Color4(0.48, 0.72, 0.88, 1)
         scene.collisionsEnabled = true
@@ -269,6 +271,7 @@ function BabylonWorld() {
 
         const onDown = (e: KeyboardEvent) => keys.current.add(e.key.toLowerCase())
         const onUp = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase())
+        const onBlur = () => keys.current.clear()
         const pointerDown = (e: PointerEvent) => { drag = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId) }
         const pointerMove = (e: PointerEvent) => {
           if (!drag) return
@@ -279,6 +282,7 @@ function BabylonWorld() {
         const pointerUp = () => { drag = false }
         window.addEventListener('keydown', onDown)
         window.addEventListener('keyup', onUp)
+        window.addEventListener('blur', onBlur)
         canvas.addEventListener('pointerdown', pointerDown)
         canvas.addEventListener('pointermove', pointerMove)
         canvas.addEventListener('pointerup', pointerUp)
