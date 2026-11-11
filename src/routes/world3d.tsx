@@ -43,7 +43,7 @@ function World3DPreview(){
   const [farmNow,setFarmNow]=useState(Date.now())
   const [interaction,setInteraction]=useState('Explore the village. Walk to the cassava plots and press E to open the Farm District.')
   const hint='Drag to look around · WASD to move'
-  useEffect(()=>{if(!showFarm)return;let active=true;void getFarm().then(v=>{if(active)setFarm(v)}).catch(e=>{if(active)setFarmError(e instanceof Error?e.message:'Farm could not load.')});const clock=window.setInterval(()=>setFarmNow(Date.now()),1000);return()=>{active=false;window.clearInterval(clock)}},[showFarm])
+  useEffect(()=>{if(!showFarm&&!showMarket)return;let active=true;void getFarm().then(v=>{if(active)setFarm(v)}).catch(e=>{if(active)setFarmError(e instanceof Error?e.message:'Farm could not load.')});const clock=window.setInterval(()=>setFarmNow(Date.now()),1000);return()=>{active=false;window.clearInterval(clock)}},[showFarm,showMarket])
   const actFarm=async(action:'plant'|'water'|'harvest'|'process',plotId?:string)=>{if(farmBusy)return;setFarmBusy(true);setFarmError('');try{setFarm(await farmAction({data:{action,plotId}}))}catch(e){setFarmError(e instanceof Error?e.message:'Farm action failed.')}finally{setFarmBusy(false)}}
   useEffect(()=>{
     const el=canvas.current, gl=el?.getContext('webgl',{antialias:true})
