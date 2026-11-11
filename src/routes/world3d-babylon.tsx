@@ -12,13 +12,11 @@ function BabylonWorld() {
   const keys = useRef(new Set<string>())
   const [status, setStatus] = useState('Loading the new 3D world…')
   const [nearby, setNearby] = useState('')
-  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let disposed = false
     let engine: any
     let scene: any
-    let frame: number | undefined
     let lastTime = 0
     let drag = false
     let lastX = 0
@@ -271,11 +269,12 @@ function BabylonWorld() {
         })
 
         engine.runRenderLoop(() => { if (!disposed) scene.render() })
-        window.addEventListener('resize', () => engine?.resize())
-        setReady(true)
+        const onResize = () => engine?.resize()
+        window.addEventListener('resize', onResize)
         setStatus('Walk through the village. Move with the pad and drag to turn the camera.')
         return () => {
           window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp)
+          window.removeEventListener('resize', onResize)
           canvas.removeEventListener('pointerdown', pointerDown); canvas.removeEventListener('pointermove', pointerMove)
           canvas.removeEventListener('pointerup', pointerUp); canvas.removeEventListener('pointercancel', pointerUp)
         }
@@ -288,7 +287,6 @@ function BabylonWorld() {
     return () => {
       disposed = true
       removeInput?.()
-      if (frame) cancelAnimationFrame(frame)
       scene?.dispose()
       engine?.dispose()
     }
