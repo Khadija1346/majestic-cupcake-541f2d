@@ -102,8 +102,10 @@ function World3DPreview(){
       }
       for(const t of things)cube(t.p,t.s,t.c)
       const vb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW)
-      const stride=6*4, pos=gl.getAttribLocation(program,'aPosition'), col=gl.getAttribLocation(program,'aColor')
-      gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,3,gl.FLOAT,false,stride,0)
+      const pos=gl.getAttribLocation(program,'aPosition'), col=gl.getAttribLocation(program,'aColor')
+      // Positions and colors are uploaded to separate tightly-packed buffers.
+      // A 6-float interleaved stride here skips most position data and leaves the scene blank.
+      gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,3,gl.FLOAT,false,0,0)
       const cb=gl.createBuffer()!;gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(colors),gl.STATIC_DRAW)
       gl.enableVertexAttribArray(col);gl.vertexAttribPointer(col,3,gl.FLOAT,false,0,0)
       const mvp=gl.getUniformLocation(program,'uMvp')
