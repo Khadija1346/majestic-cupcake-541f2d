@@ -149,9 +149,8 @@ function World3DPreview(){
         const eye:[number,number,number]=[px-Math.sin(yaw)*8,5.5,pz+Math.cos(yaw)*8]
         const target:[number,number,number]=[px,1.1,pz]
         gl.uniformMatrix4fv(mvp,false,multiply(perspective(Math.PI/3,el.width/Math.max(1,el.height),.1,120),view(eye,target)))
-        gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);frame=requestAnimationFrame(draw)
-      }
-      frame=requestAnimationFrame(draw)
+        gl.drawArrays(gl.TRIANGLES,0,vertices.length/3)
+        frame=requestAnimationFrame(draw)
       }
       frame=requestAnimationFrame(draw)
       return ()=>{cancelAnimationFrame(frame);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);el.removeEventListener('pointerdown',start);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);el.removeEventListener('pointercancel',end);gl.deleteBuffer(vb);gl.deleteBuffer(cb);gl.deleteProgram(program)}
