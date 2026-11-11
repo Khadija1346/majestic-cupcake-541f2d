@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { farmAction, getFarm } from '@/server/farm.functions'
 
 export const Route = createFileRoute('/world3d-babylon')({ component: BabylonWorld })
 
@@ -12,6 +13,36 @@ function BabylonWorld() {
   const keys = useRef(new Set<string>())
   const [status, setStatus] = useState('Loading the new 3D world…')
   const [nearby, setNearby] = useState('')
+  const [farm, setFarm] = useState<Awaited<ReturnType<typeof getFarm>> | null>(null)
+  const [farmOpen, setFarmOpen] = useState(false)
+  const [farmLoading, setFarmLoading] = useState(true)
+  const [farmBusy, setFarmBusy] = useState<string | null>(null)
+  const [farmError, setFarmError] = useState('')
+  const reloadFarm = async () => {
+    try {
+      setFarmError('')
+      setFarm(await getFarm())
+    } catch (error) {
+      setFarmError(error instanceof Error ? error.message : 'Could not load saved farm data.')
+    } finally {
+      setFarmLoading(false)
+    }
+  }
+  useEffect(() => { void reloadFarm() }, [])
+  const runFarmAction = async (action: 'plant' | 'water' | 'harvest' | 'process', plotId?: string) => {
+    if (farmBusy) return
+    const key = plotId ? action + ':' + plotId : action
+    setFarmBusy(key)
+    setFarmError('')
+    try {
+      setFarm(await farmAction({ data: { action, plotId } }))
+    } catch (error) {
+      setFarmError(error instanceof Error ? error.message : 'Farm action failed. Please retry.')
+      await reloadFarm()
+    } finally {
+      setFarmBusy(null)
+    }
+  }
 
   useEffect(() => {
     let disposed = false
@@ -314,7 +345,34 @@ function BabylonWorld() {
         <button aria-label="Move right" className="h-14 w-14 rounded-2xl border border-white/30 bg-black/70 text-2xl font-black active:bg-amber-400 active:text-black" onPointerDown={e => { e.preventDefault(); press('d', true) }} onPointerUp={() => press('d', false)} onPointerCancel={() => press('d', false)} onPointerLeave={() => press('d', false)}>→</button>
       </div>
     </div>
-    <button className="absolute bottom-10 right-5 rounded-2xl bg-amber-400 px-6 py-4 font-black text-black shadow-xl active:scale-95" onClick={() => setStatus(nearby ? nearby + ' interaction is being connected to the saved game systems.' : 'Walk closer to the cassava farm, market or processing shed first.')}>INTERACT</button>
+    <button className="absolute bottom-10 right-5 rounded-2xl bg-amber-400 px-6 py-4 font-black text-black shadow-xl active:scale-95" onClick={() => { if (nearby === 'Farm District' || nearby === 'Processing Shed') setFarmOpen(true); else setStatus(nearby ? nearby + ' services are not connected yet.' : 'Walk closer to the cassava farm, market or processing shed first.') }}>INTERACT</button>
+    {farmOpen && <section className="absolute bottom-28 right-3 z-20 max-h-[55vh] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border border-amber-200/30 bg-[#14251f]/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between gap-3">
+        <div><div className="text-xs font-black tracking-widest text-amber-300">SERVER-SAVED FARM</div><h2 className="text-lg font-black">Cassava District</h2></div>
+        <button className="rounded-lg bg-white/10 px-3 py-2 text-sm" onClick={() => setFarmOpen(false)}>Close</button>
+      </div>
+      {farmLoading ? <p className="py-5 text-sm text-white/70">Loading your saved farm…</p> : <>
+        {farm && <div className="my-3 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="rounded-xl bg-white/10 p-2"><b className="block text-lg">{farm.seeds}</b>Stems</div>
+          <div className="rounded-xl bg-white/10 p-2"><b className="block text-lg">{farm.cassava}</b>Cassava</div>
+          <div className="rounded-xl bg-white/10 p-2"><b className="block text-lg">{farm.garri}</b>Garri</div>
+        </div>}
+        {farm?.plots.map((plot, index) => {
+          const ready = plot.state === 'growing' && !!plot.readyAt && Date.parse(plot.readyAt) <= Date.now()
+          const busy = !!farmBusy
+          return <div key={plot.id} className="mb-2 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="mb-2 flex justify-between text-sm"><b>Plot {index + 1}</b><span className="text-amber-200">{plot.state === 'empty' ? 'Empty' : ready ? 'Ready to harvest' : 'Growing'}</span></div>
+            {plot.state === 'empty' ? <button disabled={busy || farm.seeds < 1} className="w-full rounded-lg bg-amber-400 px-3 py-2 text-sm font-bold text-black disabled:opacity-40" onClick={() => void runFarmAction('plant', plot.id)}>{farmBusy === 'plant:' + plot.id ? 'Planting…' : 'Plant cassava'}</button> : <div className="flex gap-2">
+              {!plot.wateredAt && !ready && <button disabled={busy} className="flex-1 rounded-lg bg-sky-700 px-2 py-2 text-xs font-bold disabled:opacity-40" onClick={() => void runFarmAction('water', plot.id)}>Water</button>}
+              <button disabled={busy || !ready} className="flex-1 rounded-lg bg-amber-400 px-2 py-2 text-xs font-bold text-black disabled:opacity-40" onClick={() => void runFarmAction('harvest', plot.id)}>Harvest</button>
+            </div>}
+          </div>
+        })}
+        <button disabled={!farm || farm.cassava < 3 || !!farmBusy} className="mt-1 w-full rounded-lg bg-emerald-700 px-3 py-3 text-sm font-bold disabled:opacity-40" onClick={() => void runFarmAction('process')}>{farmBusy === 'process' ? 'Processing…' : 'Process 3 cassava into garri'}</button>
+      </>}
+      {farmError && <div role="alert" className="mt-3 rounded-lg border border-red-300/30 bg-red-950/60 p-3 text-xs text-red-100">{farmError}<button className="ml-2 underline" onClick={() => void reloadFarm()}>Retry</button></div>}
+      <p className="mt-3 text-[10px] text-white/50">Inventory and crop actions are validated and saved by the game server. These are in-game resources, not cash or withdrawable tokens.</p>
+    </section>}
     <div className="pointer-events-none absolute bottom-2 right-5 text-[10px] text-white/65">Drag anywhere on the world to look around</div>
   </main>
 }
