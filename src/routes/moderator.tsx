@@ -6,7 +6,9 @@ import {
   adminDecide,
   getStaffStatus,
   modActivity,
+  modGames,
   modOverview,
+  modReviewGame,
   requestModAccess,
 } from '@/server/mod.functions'
 
@@ -38,6 +40,7 @@ function ModeratorOffice() {
   const [staff, setStaff] = useState<StaffStatus | null>(null)
   const [overview, setOverview] = useState<any>(null)
   const [activity, setActivity] = useState<any[]>([])
+  const [pendingGames, setPendingGames] = useState<any[]>([])
   const [access, setAccess] = useState<any>(null)
   const [garriId, setGarriId] = useState('')
   const [note, setNote] = useState('')
@@ -52,13 +55,15 @@ function ModeratorOffice() {
       const status = await getStaffStatus() as StaffStatus
       setStaff(status)
       if (status.signedIn && status.role !== 'none') {
-        const [stats, log] = await Promise.all([modOverview(), modActivity()])
+        const [stats, log, games] = await Promise.all([modOverview(), modActivity(), modGames({ data: { status: 'pending' } })])
         setOverview(stats)
         setActivity(log)
+        setPendingGames(games)
         if (status.role === 'admin') setAccess(await adminAccess())
       } else {
         setOverview(null)
         setActivity([])
+        setPendingGames([])
         setAccess(null)
       }
     } catch (e) {
@@ -100,6 +105,17 @@ function ModeratorOffice() {
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not submit access request.')
+    } finally { setBusy(false) }
+  }
+
+  const reviewGame = async (gameId: string, decision: 'verified' | 'flagged') => {
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await modReviewGame({ data: { gameId, decision, note: note.trim() || undefined } })
+      setMessage(decision === 'verified' ? 'Game run verified.' : 'Game run flagged and removed from verified rankings.')
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not review this game run.')
     } finally { setBusy(false) }
   }
 
@@ -168,6 +184,17 @@ function ModeratorOffice() {
             )}
           </div>
         </section>
+
+        {staff?.signedIn && staff.role !== 'none' && (
+          <section className="panel p-6">
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-display text-lg">Game verification queue</h2><p className="mt-1 text-xs text-cream/55">Review pending runs before they enter verified leaderboards.</p></div><span className="chip bg-gold/15 text-gold">{pendingGames.length} pending</span></div>
+            <label className="mt-4 block text-xs text-cream/60">Review note (optional)</label>
+            <input value={note} onChange={e => setNote(e.target.value)} maxLength={280} className="mt-1 w-full rounded-xl border border-cream/15 bg-ink/50 px-3 py-3 text-sm outline-none focus:border-gold" placeholder="Reason for this review…" />
+            <div className="mt-4 space-y-3">
+              {pendingGames.length === 0 ? <p className="rounded-xl bg-ink/30 p-4 text-sm text-cream/55">No pending game runs need review.</p> : pendingGames.map((game: any) => <div key={game.gameId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink/40 p-4"><div className="min-w-0"><div className="font-bold">{game.name} <span className="font-mono text-xs text-gold">{game.garriId}</span></div><div className="mt-1 text-xs text-cream/55">{game.mode} · score {Number(game.score).toLocaleString()} · {new Date(game.playedAt).toLocaleString()}</div><div className="text-[10px] text-cream/40">Run {game.gameId}</div></div><div className="flex gap-2"><button disabled={busy} onClick={() => void reviewGame(game.gameId, 'verified')} className="btn btn-gold !px-3 !py-2 text-xs">Verify</button><button disabled={busy} onClick={() => void reviewGame(game.gameId, 'flagged')} className="btn btn-ghost !px-3 !py-2 text-xs">Flag</button></div></div>)}
+            </div>
+          </section>
+        )}
 
         {staff?.signedIn && staff.role === 'admin' && access && (
           <section className="panel p-6">
