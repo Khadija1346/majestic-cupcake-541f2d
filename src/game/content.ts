@@ -49,6 +49,7 @@ export const DISTRICTS = [
   { id: 'bank', name: 'Bank', icon: '🏦' },
   { id: 'gardens', name: 'Gardens', icon: '🌴' },
   { id: 'community', name: 'Community Hub', icon: '🥁' },
+  { id: 'farm', name: 'Farm District', icon: '🌱' },
 ] as const
 
 // ─── Secrets ────────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'harmattan', name: 'Dust and Glory', desc: 'Win a Harmattan run.', icon: '🌪️', xp: 150, test: (m) => m.harmattanWinsSeason >= 1 },
   { id: 'score5k', name: 'Big Pot', desc: 'Score 5,000+ in one run.', icon: '🔥', xp: 120, test: (m) => m.bestScore >= 5000 },
   { id: 'garri100', name: 'Garri Factory', desc: 'Make 100 cups of garri across runs.', icon: '🥣', xp: 100, test: (m) => m.totalGarriMade >= 100 },
-  { id: 'explorer', name: 'Know Every Street', desc: 'Visit all 11 districts.', icon: '🧭', xp: 100, test: (m) => m.districts >= DISTRICTS.length },
+  { id: 'explorer', name: 'Know Every Street', desc: 'Visit all 12 districts.', icon: '🧭', xp: 100, test: (m) => m.districts >= DISTRICTS.length },
   { id: 'social', name: 'Everybody Knows You', desc: 'Talk to every townsperson.', icon: '🗣️', xp: 60, test: (m) => m.npcs >= 7 },
   { id: 'secret1', name: 'Curious Citizen', desc: '???', icon: '✨', xp: 50, hidden: true, test: (m) => m.secrets >= 1 },
   { id: 'secretall', name: 'Keeper of Secrets', desc: '???', icon: '🗝️', xp: 250, hidden: true, test: (m) => m.secrets >= SECRETS.length },
@@ -122,7 +123,7 @@ export const QUESTS: QuestDef[] = [
   { id: 'c-wallet', category: 'community', title: 'Open a Bank Account', desc: 'Connect your own wallet at the GARRI Bank and sign to link it to your GARRI ID.', target: 1, minLevel: 1, period: 'once', reward: { xp: 80, rep: 2, rp: 20 }, metric: (m) => m.walletLinked },
   { id: 'c-holder', category: 'community', title: 'Garri in the Pot', desc: 'Hold at least 1 $GARRI in your linked wallet (read live from Robinhood Chain).', target: 1, minLevel: 1, period: 'once', reward: { xp: 150, rep: 4, rp: 40 }, metric: (m) => Math.min(1, m.garriHeld) },
   { id: 'e-tutorial', category: 'exploration', title: 'Find Your Feet', desc: 'Complete the town tutorial.', target: 1, minLevel: 1, period: 'once', reward: { xp: 50, rep: 1, rp: 10 }, metric: (m) => (m.tutorialDone ? 1 : 0) },
-  { id: 'e-districts', category: 'exploration', title: 'Walk the Town', desc: 'Visit all 11 districts.', target: DISTRICTS.length, minLevel: 1, period: 'once', reward: { xp: 150, rep: 3, rp: 40 }, metric: (m) => m.districts },
+  { id: 'e-districts', category: 'exploration', title: 'Walk the Town', desc: 'Visit all 12 districts.', target: DISTRICTS.length, minLevel: 1, period: 'once', reward: { xp: 150, rep: 3, rp: 40 }, metric: (m) => m.districts },
   { id: 'e-npcs', category: 'exploration', title: 'Greet the Neighbours', desc: 'Talk to 5 townspeople.', target: 5, minLevel: 1, period: 'once', reward: { xp: 80, rep: 2, rp: 20 }, metric: (m) => m.npcs },
   { id: 'e-secrets', category: 'exploration', title: 'Town Mysteries', desc: 'Find 3 hidden secrets around town.', target: 3, minLevel: 2, period: 'once', reward: { xp: 200, rep: 4, rp: 60 }, metric: (m) => m.secrets },
   { id: 'g-first', category: 'game', title: 'Into the Fire', desc: 'Finish your first GARRI SURVIVAL run.', target: 1, minLevel: 1, period: 'once', reward: { xp: 60, rep: 1, rp: 15 }, metric: (m) => m.gamesPlayed },
